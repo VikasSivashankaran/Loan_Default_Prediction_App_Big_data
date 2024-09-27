@@ -1,18 +1,14 @@
 import streamlit as st
-from pyspark import SparkConf, SparkContext
-from pyspark.sql import SQLContext
-from pyspark.ml.feature import Imputer, VectorAssembler, StandardScaler
-from pyspark.ml.classification import LogisticRegression
-from pyspark.ml import Pipeline
-from pyspark.ml.evaluation import BinaryClassificationEvaluator, MulticlassClassificationEvaluator
-import os
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_auc_score, accuracy_score
 import torch
 import torch.nn as nn
 import pandas as pd
 import plotly.express as px
 import atexit
-from io import StringIO
-import sys
 
 # ---------------------------
 # Streamlit App Configuration
@@ -30,118 +26,62 @@ st.title("Loan Default Prediction Application")
 st.sidebar.header("User Input for Prediction")
 
 # ---------------------------
-# Spark Configuration and Initialization
-# ---------------------------
-
-@st.cache_resource
-def initialize_spark():
-    # Set the path to your Python executable
-    os.environ['PYSPARK_PYTHON'] = r'C:\Users\GowthamMaheswar\AppData\Local\Programs\Python\Python312\python.exe'
-    os.environ['PYSPARK_DRIVER_PYTHON'] = r'C:\Users\GowthamMaheswar\AppData\Local\Programs\Python\Python312\python.exe'
-    
-    # Create Spark configuration and context
-    conf = SparkConf() \
-        .setAppName('Loan_Default_Prediction') \
-        .setMaster("local[*]") \
-        .set("spark.executor.memory", "4g") \
-        .set("spark.driver.memory", "4g") \
-        .set("spark.network.timeout", "800s") \
-        .set("spark.executor.cores", "2")
-    
-    sc = SparkContext.getOrCreate(conf=conf)
-    
-    # Create SQLContext from SparkContext
-    sql_context = SQLContext(sc)
-    return sc, sql_context
-
-# Initialize Spark
-sc, sql_context = initialize_spark()
-
-# ---------------------------
 # Data Loading and Display
 # ---------------------------
 
 @st.cache_data
-def load_data_pandas(filepath):
-    df = pd.read_csv(filepath)
+def load_data_pandas(file):
+    df = pd.read_csv(file)
     # Columns to impute
     columns_to_impute = ['rate_of_interest', 'property_value', 'income', 'LTV']
     # Impute missing values with column mean
-    df[columns_to_impute] = df[columns_to_impute].fillna(df[columns_to_impute].mean())
+    imputer = SimpleImputer(strategy='mean')
+    df[columns_to_impute] = imputer.fit_transform(df[columns_to_impute])
     return df
-
-def load_data_spark(filepath):
-    df_spark = sql_context.read.csv(filepath, header=True, inferSchema=True)
-    return df_spark
 
 # File uploader for Loan_Default.csv
 uploaded_file = st.sidebar.file_uploader("Upload Loan_Default.csv", type=["csv"])
 
 if uploaded_file is not None:
-    # Save uploaded file to a temporary location
-    with open("Loan_Default.csv", "wb") as f:
-        f.write(uploaded_file.getbuffer())
-    data_path = "Loan_Default.csv"
-    
-    # Trigger balloons after successful upload
+    # Read uploaded file into pandas DataFrame
+    df_pandas = load_data_pandas(uploaded_file)
     st.success("CSV file uploaded successfully!")
     st.balloons()
 else:
     st.warning("Please upload the `Loan_Default.csv` file to proceed.")
     st.stop()
-    
-# Load data using Spark
-df_spark = load_data_spark(data_path)
 
 st.header("Dataset Schema")
 with st.expander("View Schema"):
-    # Capture the schema as a string
-    old_stdout = sys.stdout
-    sys.stdout = mystdout = StringIO()
-    df_spark.printSchema()
-    sys.stdout = old_stdout
-    schema_str = mystdout.getvalue()
-    st.text(schema_str)
+    st.text(df_pandas.dtypes)
 
 st.header("Sample Data")
-st.dataframe(df_spark.limit(5).toPandas())
+st.dataframe(df_pandas.head())
 
 # ---------------------------
-# Data Preprocessing with PySpark
+# Data Preprocessing with Pandas
 # ---------------------------
 
 st.header("Data Preprocessing")
 
-columns_to_impute = ['rate_of_interest', 'property_value', 'income', 'LTV']
-output_columns = columns_to_impute
+# Features and target
+X = df_pandas[['loan_amount', 'rate_of_interest', 'property_value', 'income', 'Credit_Score', 'LTV']]
+y = df_pandas['Status']
 
-# Handle missing values using Imputer
-imputer = Imputer(inputCols=columns_to_impute, outputCols=output_columns)
+# Standardize features
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
 
-# Assemble features into a single vector
-assembler = VectorAssembler(inputCols=['loan_amount', 'rate_of_interest', 'property_value', 'income', 'Credit_Score', 'LTV'],
-                            outputCol='features')
-
-# Standardize the features
-scaler = StandardScaler(inputCol='features', outputCol='scaled_features')
-
-# Create a pipeline for preprocessing
-pipeline = Pipeline(stages=[imputer, assembler, scaler])
-
-# Fit the pipeline to the data
-with st.spinner("Preprocessing data..."):
-    model = pipeline.fit(df_spark)
-    df_transformed = model.transform(df_spark)
 st.success("Data preprocessing completed successfully.")
 
 # ---------------------------
 # Train-Test Split
 # ---------------------------
 
-train_data, test_data = df_transformed.randomSplit([0.8, 0.2], seed=42)
+X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
 
-st.write(f"**Training Data Count:** {train_data.count()}")
-st.write(f"**Test Data Count:** {test_data.count()}")
+st.write(f"**Training Data Count:** {X_train.shape[0]}")
+st.write(f"**Test Data Count:** {X_test.shape[0]}")
 
 # ---------------------------
 # Logistic Regression Model
@@ -150,23 +90,22 @@ st.write(f"**Test Data Count:** {test_data.count()}")
 st.header("Logistic Regression Model")
 
 # Logistic Regression model
-lr = LogisticRegression(featuresCol='scaled_features', labelCol='Status')
+lr = LogisticRegression()
 
 # Fit the model to training data
 with st.spinner("Training Logistic Regression model..."):
-    lr_model = lr.fit(train_data)
+    lr.fit(X_train, y_train)
 st.success("Logistic Regression model trained successfully.")
 
 # Make predictions on test data
-predictions = lr_model.transform(test_data)
+predictions = lr.predict(X_test)
+probs = lr.predict_proba(X_test)[:, 1]
 
 # Evaluate the model using ROC-AUC
-evaluator = BinaryClassificationEvaluator(labelCol='Status', rawPredictionCol='rawPrediction', metricName='areaUnderROC')
-roc_auc = evaluator.evaluate(predictions)
+roc_auc = roc_auc_score(y_test, probs)
 
 # Calculate prediction accuracy
-accuracy_evaluator = MulticlassClassificationEvaluator(labelCol="Status", predictionCol="prediction", metricName="accuracy")
-accuracy = accuracy_evaluator.evaluate(predictions)
+accuracy = accuracy_score(y_test, predictions)
 
 st.subheader("Model Evaluation Metrics")
 col1, col2 = st.columns(2)
@@ -188,21 +127,10 @@ class SimpleModel(nn.Module):
         return self.fc(x)
 
 @st.cache_resource
-def train_pytorch_model(filepath):
-    # Load the dataset into pandas for PyTorch training
-    df = pd.read_csv(filepath)
-    
-    # Preprocess the data: Handle missing values
-    columns_to_impute = ['rate_of_interest', 'property_value', 'income', 'LTV']
-    df[columns_to_impute] = df[columns_to_impute].fillna(df[columns_to_impute].mean())
-    
-    # Prepare features and labels
-    X = df[['loan_amount', 'rate_of_interest', 'property_value', 'income', 'Credit_Score', 'LTV']].values
-    y = df['Status'].values  # Assuming 'Status' is the column to predict
-    
+def train_pytorch_model(X, y):
     # Convert to PyTorch tensors
     X_tensor = torch.tensor(X, dtype=torch.float32)
-    y_tensor = torch.tensor(y, dtype=torch.long)
+    y_tensor = torch.tensor(y.values, dtype=torch.long)
     
     # Create a DataLoader
     dataset = torch.utils.data.TensorDataset(X_tensor, y_tensor)
@@ -238,7 +166,7 @@ def train_pytorch_model(filepath):
 
 # Train PyTorch model
 with st.spinner("Training PyTorch model..."):
-    pytorch_model = train_pytorch_model(data_path)
+    pytorch_model = train_pytorch_model(X_train, y_train)
 st.success("PyTorch model trained and saved successfully.")
 
 # Load the pre-trained PyTorch model
@@ -332,25 +260,19 @@ else:
 #     st.snow()
     
 #     # ---------------------------
-#     # Prediction Using PySpark Logistic Regression Model
+#     # Prediction Using Logistic Regression Model
 #     # ---------------------------
     
-#     st.subheader("Prediction using Logistic Regression (PySpark)")
+#     st.subheader("Prediction using Logistic Regression")
     
-#     # Convert user input to Spark DataFrame
-#     input_spark_df = sql_context.createDataFrame(input_df)
-    
-#     # Preprocess the input using the same pipeline
-#     input_transformed = model.transform(input_spark_df)
+#     # Preprocess the input
+#     input_scaled = scaler.transform(input_df)
     
 #     # Make prediction
-#     lr_prediction = lr_model.transform(input_transformed)
-    
-#     # Extract prediction
-#     lr_pred = lr_prediction.select("prediction").collect()[0][0]
+#     lr_pred = lr.predict(input_scaled)[0]
     
 #     # Interpret the prediction
-#     if lr_pred == 1.0:
+#     if lr_pred == 1:
 #         lr_prediction_text = "The loan is likely to be **sanctioned**."
 #     else:
 #         lr_prediction_text = "The loan is likely to be **rejected**."
@@ -364,7 +286,7 @@ else:
 #     st.subheader("Prediction using Neural Network (PyTorch)")
     
 #     # Convert user input into tensor for PyTorch
-#     user_input_tensor = torch.tensor(input_df.values, dtype=torch.float32)
+#     user_input_tensor = torch.tensor(input_scaled, dtype=torch.float32)
     
 #     # Make prediction using PyTorch model
 #     with torch.no_grad():
@@ -386,10 +308,10 @@ else:
 #     st.subheader("Combined Prediction Analysis")
     
 #     if lr_pred == pytorch_pred:
-#         st.write(f"Both models agree: The loan is likely to be **{'sanctioned' if lr_pred == 1.0 else 'rejected'}**.")
+#         st.write(f"Both models agree: The loan is likely to be **{'sanctioned' if lr_pred == 1 else 'rejected'}**.")
 #     else:
 #         st.write("The models have differing predictions:")
-#         st.write(f"- Logistic Regression predicts: **{'Sanctioned' if lr_pred == 1.0 else 'Rejected'}**.")
+#         st.write(f"- Logistic Regression predicts: **{'Sanctioned' if lr_pred == 1 else 'Rejected'}**.")
 #         st.write(f"- Neural Network predicts: **{'Sanctioned' if pytorch_pred == 1 else 'Rejected'}**.")
     
 #     # ---------------------------
@@ -412,7 +334,7 @@ else:
 st.header("3D Visualizations")
 
 # Load data using pandas for visualization
-df_pandas = load_data_pandas(data_path)
+df_pandas = load_data_pandas(uploaded_file)
 
 # Sample 100 rows
 if len(df_pandas) >= 100:
@@ -456,8 +378,4 @@ st.plotly_chart(fig_scatter, use_container_width=True)
 # Cleanup
 # ---------------------------
 
-# Stop the SparkContext when the app stops
-def stop_spark():
-    sc.stop()
-
-atexit.register(stop_spark)
+# No Spark to stop since we're using Pandas

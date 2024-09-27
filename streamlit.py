@@ -133,7 +133,7 @@ user_input_tensor = torch.tensor(user_input_df.values, dtype=torch.float32)
 
 # Load the pre-trained PyTorch model
 try:
-    pytorch_model = SimpleModel(input_dim=len(user_input_df.columns))  # Ensure to initialize the model
+    pytorch_model = SimpleModel(input_dim=len(user_input_df.columns))  # Initialize the model
     pytorch_model.load_state_dict(torch.load('loan_prediction_model.pth', map_location=torch.device('cpu')))  # Load model weights
     pytorch_model.eval()  # Set the model to evaluation mode
 

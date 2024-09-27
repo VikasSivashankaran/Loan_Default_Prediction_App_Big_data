@@ -85,7 +85,7 @@ if uploaded_file is not None:
 else:
     st.warning("Please upload the `Loan_Default.csv` file to proceed.")
     st.stop()
-    st.balloons()
+st.balloons()
 
 # Load data using Spark
 df_spark = load_data_spark(data_path)

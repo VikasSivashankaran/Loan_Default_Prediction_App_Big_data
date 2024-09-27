@@ -12,6 +12,7 @@ import pandas as pd
 import plotly.express as px
 
 st.snow()
+
 # Streamlit configuration
 st.title("Loan Default Prediction App")
 st.write("This app uses both PySpark and PyTorch models for loan default prediction.")

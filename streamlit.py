@@ -64,6 +64,10 @@ sc, sql_context = initialize_spark()
 @st.cache_data
 def load_data_pandas(filepath):
     df = pd.read_csv(filepath)
+    # Columns to impute
+    columns_to_impute = ['rate_of_interest', 'property_value', 'income', 'LTV']
+    # Impute missing values with column mean
+    df[columns_to_impute] = df[columns_to_impute].fillna(df[columns_to_impute].mean())
     return df
 
 def load_data_spark(filepath):
@@ -185,6 +189,7 @@ def train_pytorch_model(filepath):
     df = pd.read_csv(filepath)
     
     # Preprocess the data: Handle missing values
+    columns_to_impute = ['rate_of_interest', 'property_value', 'income', 'LTV']
     df[columns_to_impute] = df[columns_to_impute].fillna(df[columns_to_impute].mean())
     
     # Prepare features and labels
@@ -302,17 +307,36 @@ if len(df_pandas) >= 100:
 else:
     sampled_df = df_pandas.copy()
 
+# Drop rows with NaN in 'loan_amount', 'rate_of_interest', or 'age'
+sampled_df = sampled_df.dropna(subset=['loan_amount', 'rate_of_interest', 'age'])
+
+# Ensure that 'rate_of_interest' has no negative or zero values if required
+# For example, replace negative values with a small positive value to avoid size issues
+sampled_df['rate_of_interest'] = sampled_df['rate_of_interest'].apply(lambda x: x if x > 0 else 0.1)
+
 # 3D Line Plot
 st.subheader("3D Line Plot")
-fig_line = px.line_3d(sampled_df, x="loan_amount", y="rate_of_interest", z="age", 
-                     title="3D Line Plot of Loan Amount, Rate of Interest, and Age")
+fig_line = px.line_3d(
+    sampled_df,
+    x="loan_amount",
+    y="rate_of_interest",
+    z="age",
+    title="3D Line Plot of Loan Amount, Rate of Interest, and Age"
+)
 st.plotly_chart(fig_line, use_container_width=True)
 
 # 3D Scatter Plot
 st.subheader("3D Scatter Plot")
-fig_scatter = px.scatter_3d(sampled_df, x="loan_amount", y="rate_of_interest", z="age", 
-                           color='age', size='rate_of_interest', symbol='loan_amount',
-                           title="3D Scatter Plot of Loan Amount, Rate of Interest, and Age")
+fig_scatter = px.scatter_3d(
+    sampled_df,
+    x="loan_amount",
+    y="rate_of_interest",
+    z="age", 
+    color='age',
+    size='rate_of_interest',
+    symbol='loan_amount',
+    title="3D Scatter Plot of Loan Amount, Rate of Interest, and Age"
+)
 st.plotly_chart(fig_scatter, use_container_width=True)
 
 # ---------------------------

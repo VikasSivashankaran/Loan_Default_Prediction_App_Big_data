@@ -244,7 +244,7 @@ def load_pytorch_model(filepath, input_dim):
 pytorch_model = load_pytorch_model('loan_prediction_model.pth', input_dim=6)
 
 # ---------------------------
-# User Input for Prediction
+# Loan Eligibility Prediction and Comparison with Dataset
 # ---------------------------
 
 st.header("Loan Eligibility Prediction")
@@ -275,22 +275,132 @@ input_df = user_input_features()
 st.subheader("User Input Features")
 st.write(input_df)
 
-# Convert user input into tensor
-user_input_tensor = torch.tensor(input_df.values, dtype=torch.float32)
+# ---------------------------
+# Compare User Input with Dataset
+# ---------------------------
 
-# Make prediction using PyTorch model
-with torch.no_grad():
-    output = pytorch_model(user_input_tensor)
-    predicted_class = torch.argmax(output, dim=1).item()  # Get the predicted class
+st.subheader("Dataset Comparison")
 
-# Interpret the prediction
-if predicted_class == 1:
-    prediction_text = "The loan is likely to be **sanctioned**."
+@st.cache_data
+def load_data_for_comparison(filepath):
+    df = pd.read_csv(filepath)
+    # Handle missing values
+    columns_to_impute = ['rate_of_interest', 'property_value', 'income', 'LTV']
+    df[columns_to_impute] = df[columns_to_impute].fillna(df[columns_to_impute].mean())
+    return df
+
+df_pandas_for_comparison = load_data_for_comparison(data_path)
+
+# Define tolerance levels for comparison
+tolerance = {
+    'loan_amount': 1000,
+    'rate_of_interest': 1,
+    'property_value': 10000,
+    'income': 5000,
+    'Credit_Score': 0,  # Exact match
+    'LTV': 0  # Exact match
+}
+
+# Function to find similar rows
+def find_similar_rows(df, input_data, tol):
+    conditions = (
+        (df['loan_amount'] >= input_data['loan_amount'].values[0] - tol['loan_amount']) &
+        (df['loan_amount'] <= input_data['loan_amount'].values[0] + tol['loan_amount']) &
+        (df['rate_of_interest'] >= input_data['rate_of_interest'].values[0] - tol['rate_of_interest']) &
+        (df['rate_of_interest'] <= input_data['rate_of_interest'].values[0] + tol['rate_of_interest']) &
+        (df['property_value'] >= input_data['property_value'].values[0] - tol['property_value']) &
+        (df['property_value'] <= input_data['property_value'].values[0] + tol['property_value']) &
+        (df['income'] >= input_data['income'].values[0] - tol['income']) &
+        (df['income'] <= input_data['income'].values[0] + tol['income']) &
+        (df['Credit_Score'] == input_data['Credit_Score'].values[0]) &
+        (df['LTV'] == input_data['LTV'].values[0])
+    )
+    similar = df[conditions]
+    return similar
+
+similar_rows = find_similar_rows(df_pandas_for_comparison, input_df, tolerance)
+
+if not similar_rows.empty:
+    st.write(f"Found {len(similar_rows)} similar rows in the dataset.")
+    with st.expander("View Similar Rows"):
+        st.dataframe(similar_rows)
 else:
-    prediction_text = "The loan is likely to be **rejected**."
+    st.write("No similar rows found in the dataset.")
 
-st.subheader("Prediction")
-st.write(prediction_text)
+# ---------------------------
+# Make Prediction Using Models
+# ---------------------------
+
+if st.button("Make Prediction"):
+    # ---------------------------
+    # Prediction Using PySpark Logistic Regression Model
+    # ---------------------------
+    
+    st.subheader("Prediction using Logistic Regression (PySpark)")
+    
+    # Convert user input to Spark DataFrame
+    input_spark_df = sql_context.createDataFrame(input_df)
+    
+    # Preprocess the input using the same pipeline
+    input_transformed = model.transform(input_spark_df)
+    
+    # Make prediction
+    lr_prediction = lr_model.transform(input_transformed)
+    
+    # Extract prediction
+    lr_pred = lr_prediction.select("prediction").collect()[0][0]
+    
+    # Interpret the prediction
+    if lr_pred == 1.0:
+        lr_prediction_text = "The loan is likely to be **sanctioned**."
+    else:
+        lr_prediction_text = "The loan is likely to be **rejected**."
+    
+    st.write(lr_prediction_text)
+    
+    # ---------------------------
+    # Prediction Using PyTorch Model
+    # ---------------------------
+    
+    st.subheader("Prediction using Neural Network (PyTorch)")
+    
+    # Convert user input into tensor for PyTorch
+    user_input_tensor = torch.tensor(input_df.values, dtype=torch.float32)
+    
+    # Make prediction using PyTorch model
+    with torch.no_grad():
+        output = pytorch_model(user_input_tensor)
+        pytorch_pred = torch.argmax(output, dim=1).item()  # Get the predicted class
+    
+    # Interpret the prediction
+    if pytorch_pred == 1:
+        pytorch_prediction_text = "The loan is likely to be **sanctioned**."
+    else:
+        pytorch_prediction_text = "The loan is likely to be **rejected**."
+    
+    st.write(pytorch_prediction_text)
+    
+    # ---------------------------
+    # Combined Prediction Interpretation
+    # ---------------------------
+    
+    st.subheader("Combined Prediction Analysis")
+    
+    if lr_pred == pytorch_pred:
+        st.write(f"Both models agree: The loan is likely to be **{'sanctioned' if lr_pred == 1.0 else 'rejected'}**.")
+    else:
+        st.write("The models have differing predictions:")
+        st.write(f"- Logistic Regression predicts: **{'Sanctioned' if lr_pred == 1.0 else 'Rejected'}**.")
+        st.write(f"- Neural Network predicts: **{'Sanctioned' if pytorch_pred == 1 else 'Rejected'}**.")
+    
+    # ---------------------------
+    # Additional Information Based on Similarity
+    # ---------------------------
+    
+    if not similar_rows.empty:
+        st.write("The loan decision was informed by similar entries found in the dataset.")
+    else:
+        st.write("No similar entries found in the dataset to influence the loan decision.")
 
 # ---------------------------
 # 3D Visualizations

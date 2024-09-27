@@ -20,9 +20,17 @@ st.write("This app uses both PySpark and PyTorch models for loan default predict
 os.environ['PYSPARK_PYTHON'] = r'C:\Users\GowthamMaheswar\AppData\Local\Programs\Python\Python312\python.exe'
 os.environ['PYSPARK_DRIVER_PYTHON'] = r'C:\Users\GowthamMaheswar\AppData\Local\Programs\Python\Python312\python.exe'
 
+# Define a simple PyTorch model
+class SimpleModel(nn.Module):
+    def __init__(self, input_dim):
+        super(SimpleModel, self).__init__()
+        self.fc = nn.Linear(input_dim, 2)  # Binary classification
+
+    def forward(self, x):
+        return self.fc(x)
+
 # Function to initialize Spark and run Spark-related operations
 def run_spark_model():
-    sc = None  # Initialize sc to None
     try:
         # Create Spark configuration and context
         conf = SparkConf() \
@@ -85,21 +93,11 @@ def run_spark_model():
     except Exception as e:
         st.error(f"An error occurred: {e}")
     finally:
-        if sc is not None:
-            sc.stop()  # Stop Spark context if it was initialized
+        sc.stop()
 
 # Button to run Spark model
 if st.button("Run Spark Model"):
     run_spark_model()  # Run Spark only when the button is pressed
-
-# Define a simple PyTorch model
-class SimpleModel(nn.Module):
-    def __init__(self, input_dim):
-        super(SimpleModel, self).__init__()
-        self.fc = nn.Linear(input_dim, 2)  # Binary classification
-
-    def forward(self, x):
-        return self.fc(x)
 
 # Load the dataset into pandas for PyTorch training
 df = pd.read_csv('Loan_Default.csv')
@@ -134,19 +132,24 @@ user_input_df = pd.DataFrame([user_input_dict])
 user_input_tensor = torch.tensor(user_input_df.values, dtype=torch.float32)
 
 # Load the pre-trained PyTorch model
-pytorch_model = torch.load('loan_prediction_model.pth', weights_only=True)
-pytorch_model.eval()  # Set the model to evaluation mode
+try:
+    pytorch_model = SimpleModel(input_dim=len(user_input_df.columns))  # Ensure to initialize the model
+    pytorch_model.load_state_dict(torch.load('loan_prediction_model.pth', map_location=torch.device('cpu')))  # Load model weights
+    pytorch_model.eval()  # Set the model to evaluation mode
 
-# Make prediction using PyTorch model
-with torch.no_grad():
-    output = pytorch_model(user_input_tensor)
-    predicted_class = torch.argmax(output, dim=1).item()  # Get the predicted class
+    # Make prediction using PyTorch model
+    with torch.no_grad():
+        output = pytorch_model(user_input_tensor)
+        predicted_class = torch.argmax(output, dim=1).item()  # Get the predicted class
 
-# Interpret the prediction
-if predicted_class == 1:
-    st.success("Based on your inputs, the loan is likely to be sanctioned (PyTorch model).")
-else:
-    st.error("Based on your inputs, the loan is likely to be rejected (PyTorch model).")
+    # Interpret the prediction
+    if predicted_class == 1:
+        st.success("Based on your inputs, the loan is likely to be sanctioned (PyTorch model).")
+    else:
+        st.error("Based on your inputs, the loan is likely to be rejected (PyTorch model).")
+
+except Exception as e:
+    st.error(f"Error loading PyTorch model: {e}")
 
 # Visualization
 st.write("3D Visualization of Data")
@@ -159,5 +162,5 @@ st.plotly_chart(fig_line)
 
 # 3D Scatter Plot
 fig_scatter = px.scatter_3d(sampled_df, x="loan_amount", y="rate_of_interest", z="income", 
-                             color='income', size='rate_of_interest', symbol='loan_amount')
+                            color='income', size='rate_of_interest', symbol='loan_amount')
 st.plotly_chart(fig_scatter)

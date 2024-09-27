@@ -1,5 +1,5 @@
 streamlit
 pyspark
 torch
-plotly
 pandas
+plotly

@@ -11,6 +11,8 @@ import torch.nn as nn
 import pandas as pd
 import plotly.express as px
 import atexit
+from io import StringIO
+import sys
 
 # ---------------------------
 # Streamlit App Configuration
@@ -64,6 +66,10 @@ def load_data_pandas(filepath):
     df = pd.read_csv(filepath)
     return df
 
+def load_data_spark(filepath):
+    df_spark = sql_context.read.csv(filepath, header=True, inferSchema=True)
+    return df_spark
+
 # File uploader for Loan_Default.csv
 uploaded_file = st.sidebar.file_uploader("Upload Loan_Default.csv", type=["csv"])
 
@@ -77,15 +83,11 @@ else:
     st.stop()
 
 # Load data using Spark
-df_spark = load_data_spark = lambda filepath: sql_context.read.csv(filepath, header=True, inferSchema=True)(filepath)
 df_spark = load_data_spark(data_path)
 
 st.header("Dataset Schema")
 with st.expander("View Schema"):
     # Capture the schema as a string
-    from io import StringIO
-    import sys
-
     old_stdout = sys.stdout
     sys.stdout = mystdout = StringIO()
     df_spark.printSchema()
@@ -295,11 +297,15 @@ st.header("3D Visualizations")
 df_pandas = load_data_pandas(data_path)
 
 # Sample 100 rows
-sampled_df = df_pandas.sample(n=100, random_state=42)
+if len(df_pandas) >= 100:
+    sampled_df = df_pandas.sample(n=100, random_state=42)
+else:
+    sampled_df = df_pandas.copy()
 
 # 3D Line Plot
 st.subheader("3D Line Plot")
-fig_line = px.line_3d(sampled_df, x="loan_amount", y="rate_of_interest", z="age", title="3D Line Plot of Loan Amount, Rate of Interest, and Age")
+fig_line = px.line_3d(sampled_df, x="loan_amount", y="rate_of_interest", z="age", 
+                     title="3D Line Plot of Loan Amount, Rate of Interest, and Age")
 st.plotly_chart(fig_line, use_container_width=True)
 
 # 3D Scatter Plot

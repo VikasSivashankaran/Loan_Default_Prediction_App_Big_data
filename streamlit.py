@@ -244,7 +244,7 @@ def load_pytorch_model(filepath, input_dim):
 pytorch_model = load_pytorch_model('loan_prediction_model.pth', input_dim=6)
 
 # ---------------------------
-# Loan Eligibility Prediction and Comparison with Dataset
+# Loan Eligibility Prediction and Model Logic
 # ---------------------------
 
 st.header("Loan Eligibility Prediction")
@@ -276,56 +276,45 @@ st.subheader("User Input Features")
 st.write(input_df)
 
 # ---------------------------
-# Compare User Input with Dataset
+# Implementing Rule-Based Logic
 # ---------------------------
 
-st.subheader("Dataset Comparison")
+st.subheader("Eligibility Criteria Analysis")
 
-@st.cache_data
-def load_data_for_comparison(filepath):
-    df = pd.read_csv(filepath)
-    # Handle missing values
-    columns_to_impute = ['rate_of_interest', 'property_value', 'income', 'LTV']
-    df[columns_to_impute] = df[columns_to_impute].fillna(df[columns_to_impute].mean())
-    return df
+def eligibility_logic(input_data):
+    """
+    Implements rule-based logic for loan eligibility.
+    """
+    reasons = []
+    eligible = True
+    
+    # Example criteria
+    if input_data['Credit_Score'].values[0] < 600:
+        eligible = False
+        reasons.append("Credit Score below 600.")
+    
+    if input_data['income'].values[0] < 20000:
+        eligible = False
+        reasons.append("Income below $20,000.")
+    
+    if input_data['loan_amount'].values[0] > 5 * input_data['income'].values[0]:
+        eligible = False
+        reasons.append("Loan amount exceeds 5 times the income.")
+    
+    if input_data['LTV'].values[0] > 90:
+        eligible = False
+        reasons.append("Loan-to-Value (LTV) ratio above 90%.")
+    
+    return eligible, reasons
 
-df_pandas_for_comparison = load_data_for_comparison(data_path)
+is_eligible, eligibility_reasons = eligibility_logic(input_df)
 
-# Define tolerance levels for comparison
-tolerance = {
-    'loan_amount': 1000,
-    'rate_of_interest': 1,
-    'property_value': 10000,
-    'income': 5000,
-    'Credit_Score': 0,  # Exact match
-    'LTV': 0  # Exact match
-}
-
-# Function to find similar rows
-def find_similar_rows(df, input_data, tol):
-    conditions = (
-        (df['loan_amount'] >= input_data['loan_amount'].values[0] - tol['loan_amount']) &
-        (df['loan_amount'] <= input_data['loan_amount'].values[0] + tol['loan_amount']) &
-        (df['rate_of_interest'] >= input_data['rate_of_interest'].values[0] - tol['rate_of_interest']) &
-        (df['rate_of_interest'] <= input_data['rate_of_interest'].values[0] + tol['rate_of_interest']) &
-        (df['property_value'] >= input_data['property_value'].values[0] - tol['property_value']) &
-        (df['property_value'] <= input_data['property_value'].values[0] + tol['property_value']) &
-        (df['income'] >= input_data['income'].values[0] - tol['income']) &
-        (df['income'] <= input_data['income'].values[0] + tol['income']) &
-        (df['Credit_Score'] == input_data['Credit_Score'].values[0]) &
-        (df['LTV'] == input_data['LTV'].values[0])
-    )
-    similar = df[conditions]
-    return similar
-
-similar_rows = find_similar_rows(df_pandas_for_comparison, input_df, tolerance)
-
-if not similar_rows.empty:
-    st.write(f"Found {len(similar_rows)} similar rows in the dataset.")
-    with st.expander("View Similar Rows"):
-        st.dataframe(similar_rows)
+if is_eligible:
+    st.success("Based on eligibility criteria, **your loan is eligible for approval**.")
 else:
-    st.write("No similar rows found in the dataset.")
+    st.error("Based on eligibility criteria, **your loan is not eligible for approval**.")
+    for reason in eligibility_reasons:
+        st.write(f"- {reason}")
 
 # ---------------------------
 # Make Prediction Using Models
@@ -394,13 +383,17 @@ if st.button("Make Prediction"):
         st.write(f"- Neural Network predicts: **{'Sanctioned' if pytorch_pred == 1 else 'Rejected'}**.")
     
     # ---------------------------
-    # Additional Information Based on Similarity
+    # Additional Information Based on Eligibility Logic
     # ---------------------------
     
-    if not similar_rows.empty:
-        st.write("The loan decision was informed by similar entries found in the dataset.")
+    st.subheader("Eligibility Criteria Influence")
+    
+    if is_eligible:
+        st.write("Eligibility criteria indicate that the loan is eligible. Model predictions further support this decision.")
     else:
-        st.write("No similar entries found in the dataset to influence the loan decision.")
+        st.write("Despite model predictions, eligibility criteria indicate that the loan should be **rejected** based on the following reasons:")
+        for reason in eligibility_reasons:
+            st.write(f"- {reason}")
 
 # ---------------------------
 # 3D Visualizations

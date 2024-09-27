@@ -53,6 +53,11 @@ def load_data_pandas(file):
         imputer = SimpleImputer(strategy='mean')
         df[columns_to_impute] = imputer.fit_transform(df[columns_to_impute])
         
+        # Additional Validation: Check if 'Status' column exists
+        if 'Status' not in df.columns:
+            st.error("The 'Status' column is missing from the uploaded file. Please include it for prediction.")
+            st.stop()
+        
         return df
     except pd.errors.EmptyDataError:
         st.error("No columns to parse from the uploaded file. Please ensure it's a valid CSV with headers.")

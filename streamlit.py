@@ -10,7 +10,9 @@ import torch
 import torch.nn as nn
 import pandas as pd
 import plotly.express as px
+
 st.snow()
+
 # Streamlit configuration
 st.title("Loan Default Prediction App")
 st.write("This app uses both PySpark and PyTorch models for loan default prediction.")
@@ -21,66 +23,69 @@ os.environ['PYSPARK_DRIVER_PYTHON'] = r'C:\Users\GowthamMaheswar\AppData\Local\P
 
 # Function to initialize Spark and run Spark-related operations
 def run_spark_model():
-    # Create Spark configuration and context
-    conf = SparkConf() \
-        .setAppName('Loan_Default_Prediction') \
-        .setMaster("local[*]") \
-        .set("spark.executor.memory", "4g") \
-        .set("spark.driver.memory", "4g") \
-        .set("spark.network.timeout", "800s") \
-        .set("spark.executor.cores", "2")
+    try:
+        # Create Spark configuration and context
+        conf = SparkConf() \
+            .setAppName('Loan_Default_Prediction') \
+            .setMaster("local[*]") \
+            .set("spark.executor.memory", "4g") \
+            .set("spark.driver.memory", "4g") \
+            .set("spark.network.timeout", "800s") \
+            .set("spark.executor.cores", "2")
 
-    sc = SparkContext(conf=conf)
-    sql_context = SQLContext(sc)
+        sc = SparkContext(conf=conf)
+        sql_context = SQLContext(sc)
 
-    # Load dataset into a Spark DataFrame
-    df_spark = sql_context.read.csv('Loan_Default.csv', header=True, inferSchema=True)
+        # Load dataset into a Spark DataFrame
+        df_spark = sql_context.read.csv('Loan_Default.csv', header=True, inferSchema=True)
 
-    # Identify columns for imputation
-    columns_to_impute = ['rate_of_interest', 'property_value', 'income', 'LTV']
-    output_columns = columns_to_impute
+        # Identify columns for imputation
+        columns_to_impute = ['rate_of_interest', 'property_value', 'income', 'LTV']
+        output_columns = columns_to_impute
 
-    # Handle missing values using Imputer
-    imputer = Imputer(inputCols=columns_to_impute, outputCols=output_columns)
+        # Handle missing values using Imputer
+        imputer = Imputer(inputCols=columns_to_impute, outputCols=output_columns)
 
-    # Assemble features into a single vector
-    assembler = VectorAssembler(inputCols=['loan_amount', 'rate_of_interest', 'property_value', 'income', 'Credit_Score', 'LTV'],
-                                outputCol='features')
+        # Assemble features into a single vector
+        assembler = VectorAssembler(inputCols=['loan_amount', 'rate_of_interest', 'property_value', 'income', 'Credit_Score', 'LTV'],
+                                    outputCol='features')
 
-    # Standardize the features
-    scaler = StandardScaler(inputCol='features', outputCol='scaled_features')
+        # Standardize the features
+        scaler = StandardScaler(inputCol='features', outputCol='scaled_features')
 
-    # Create a pipeline for preprocessing
-    pipeline = Pipeline(stages=[imputer, assembler, scaler])
+        # Create a pipeline for preprocessing
+        pipeline = Pipeline(stages=[imputer, assembler, scaler])
 
-    # Fit the pipeline to the data
-    model = pipeline.fit(df_spark)
-    df_transformed = model.transform(df_spark)
+        # Fit the pipeline to the data
+        model = pipeline.fit(df_spark)
+        df_transformed = model.transform(df_spark)
 
-    # Split the data into training and test sets
-    train_data, test_data = df_transformed.randomSplit([0.8, 0.2])
+        # Split the data into training and test sets
+        train_data, test_data = df_transformed.randomSplit([0.8, 0.2])
 
-    # Logistic Regression model
-    lr = LogisticRegression(featuresCol='scaled_features', labelCol='Status')
+        # Logistic Regression model
+        lr = LogisticRegression(featuresCol='scaled_features', labelCol='Status')
 
-    # Fit the model to training data
-    lr_model = lr.fit(train_data)
+        # Fit the model to training data
+        lr_model = lr.fit(train_data)
 
-    # Make predictions on test data
-    predictions = lr_model.transform(test_data)
+        # Make predictions on test data
+        predictions = lr_model.transform(test_data)
 
-    # Evaluate the model using ROC-AUC
-    evaluator = BinaryClassificationEvaluator(labelCol='Status', rawPredictionCol='rawPrediction', metricName='areaUnderROC')
-    roc_auc = evaluator.evaluate(predictions)
-    st.write(f"ROC-AUC (PySpark Model): {roc_auc}")
+        # Evaluate the model using ROC-AUC
+        evaluator = BinaryClassificationEvaluator(labelCol='Status', rawPredictionCol='rawPrediction', metricName='areaUnderROC')
+        roc_auc = evaluator.evaluate(predictions)
+        st.write(f"ROC-AUC (PySpark Model): {roc_auc}")
 
-    # Calculate prediction accuracy
-    accuracy_evaluator = MulticlassClassificationEvaluator(labelCol="Status", predictionCol="prediction", metricName="accuracy")
-    accuracy = accuracy_evaluator.evaluate(predictions)
-    st.write(f"Accuracy (PySpark Model): {accuracy}")
+        # Calculate prediction accuracy
+        accuracy_evaluator = MulticlassClassificationEvaluator(labelCol="Status", predictionCol="prediction", metricName="accuracy")
+        accuracy = accuracy_evaluator.evaluate(predictions)
+        st.write(f"Accuracy (PySpark Model): {accuracy}")
 
-    # Stop the SparkContext
-    sc.stop()
+    except Exception as e:
+        st.error(f"An error occurred: {e}")
+    finally:
+        sc.stop()
 
 # Button to run Spark model
 if st.button("Run Spark Model"):
@@ -155,5 +160,3 @@ st.plotly_chart(fig_line)
 fig_scatter = px.scatter_3d(sampled_df, x="loan_amount", y="rate_of_interest", z="income", 
                             color='income', size='rate_of_interest', symbol='loan_amount')
 st.plotly_chart(fig_scatter)
-
-

@@ -381,7 +381,8 @@ if st.button("Make Prediction"):
 st.header("3D Visualizations")
 
 # Load data using pandas for visualization
-df_pandas = load_data_pandas(data_path)
+# Change this line from 'data_path' to 'uploaded_file'
+df_pandas = load_data_pandas(uploaded_file)
 
 # Sample 100 rows
 if len(df_pandas) >= 100:

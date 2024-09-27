@@ -82,10 +82,14 @@ if uploaded_file is not None:
     with open("Loan_Default.csv", "wb") as f:
         f.write(uploaded_file.getbuffer())
     data_path = "Loan_Default.csv"
+    
+    # Trigger balloons after successful upload
+    st.success("CSV file uploaded successfully!")
+    st.balloons()
 else:
     st.warning("Please upload the `Loan_Default.csv` file to proceed.")
     st.stop()
-
+    
 # Load data using Spark
 df_spark = load_data_spark(data_path)
 
@@ -212,6 +216,9 @@ def train_pytorch_model(filepath):
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(pytorch_model.parameters(), lr=0.001)
     
+    st.write("Starting PyTorch model training...")
+    st.snow()  # Trigger snow effect during training
+    
     # Train the model
     for epoch in range(10):  # Number of epochs
         running_loss = 0.0
@@ -321,6 +328,9 @@ else:
 # ---------------------------
 
 # if st.button("Make Prediction"):
+#     # Trigger a snow effect to indicate prediction is in progress
+#     st.snow()
+    
 #     # ---------------------------
 #     # Prediction Using PySpark Logistic Regression Model
 #     # ---------------------------

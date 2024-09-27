@@ -320,80 +320,80 @@ else:
 # Make Prediction Using Models
 # ---------------------------
 
-if st.button("Make Prediction"):
-    # ---------------------------
-    # Prediction Using PySpark Logistic Regression Model
-    # ---------------------------
+# if st.button("Make Prediction"):
+#     # ---------------------------
+#     # Prediction Using PySpark Logistic Regression Model
+#     # ---------------------------
     
-    st.subheader("Prediction using Logistic Regression (PySpark)")
+#     st.subheader("Prediction using Logistic Regression (PySpark)")
     
-    # Convert user input to Spark DataFrame
-    input_spark_df = sql_context.createDataFrame(input_df)
+#     # Convert user input to Spark DataFrame
+#     input_spark_df = sql_context.createDataFrame(input_df)
     
-    # Preprocess the input using the same pipeline
-    input_transformed = model.transform(input_spark_df)
+#     # Preprocess the input using the same pipeline
+#     input_transformed = model.transform(input_spark_df)
     
-    # Make prediction
-    lr_prediction = lr_model.transform(input_transformed)
+#     # Make prediction
+#     lr_prediction = lr_model.transform(input_transformed)
     
-    # Extract prediction
-    lr_pred = lr_prediction.select("prediction").collect()[0][0]
+#     # Extract prediction
+#     lr_pred = lr_prediction.select("prediction").collect()[0][0]
     
-    # Interpret the prediction
-    if lr_pred == 1.0:
-        lr_prediction_text = "The loan is likely to be **sanctioned**."
-    else:
-        lr_prediction_text = "The loan is likely to be **rejected**."
+#     # Interpret the prediction
+#     if lr_pred == 1.0:
+#         lr_prediction_text = "The loan is likely to be **sanctioned**."
+#     else:
+#         lr_prediction_text = "The loan is likely to be **rejected**."
     
-    st.write(lr_prediction_text)
+#     st.write(lr_prediction_text)
     
-    # ---------------------------
-    # Prediction Using PyTorch Model
-    # ---------------------------
+#     # ---------------------------
+#     # Prediction Using PyTorch Model
+#     # ---------------------------
     
-    st.subheader("Prediction using Neural Network (PyTorch)")
+#     st.subheader("Prediction using Neural Network (PyTorch)")
     
-    # Convert user input into tensor for PyTorch
-    user_input_tensor = torch.tensor(input_df.values, dtype=torch.float32)
+#     # Convert user input into tensor for PyTorch
+#     user_input_tensor = torch.tensor(input_df.values, dtype=torch.float32)
     
-    # Make prediction using PyTorch model
-    with torch.no_grad():
-        output = pytorch_model(user_input_tensor)
-        pytorch_pred = torch.argmax(output, dim=1).item()  # Get the predicted class
+#     # Make prediction using PyTorch model
+#     with torch.no_grad():
+#         output = pytorch_model(user_input_tensor)
+#         pytorch_pred = torch.argmax(output, dim=1).item()  # Get the predicted class
     
-    # Interpret the prediction
-    if pytorch_pred == 1:
-        pytorch_prediction_text = "The loan is likely to be **sanctioned**."
-    else:
-        pytorch_prediction_text = "The loan is likely to be **rejected**."
+#     # Interpret the prediction
+#     if pytorch_pred == 1:
+#         pytorch_prediction_text = "The loan is likely to be **sanctioned**."
+#     else:
+#         pytorch_prediction_text = "The loan is likely to be **rejected**."
     
-    st.write(pytorch_prediction_text)
+#     st.write(pytorch_prediction_text)
     
-    # ---------------------------
-    # Combined Prediction Interpretation
-    # ---------------------------
+#     # ---------------------------
+#     # Combined Prediction Interpretation
+#     # ---------------------------
     
-    st.subheader("Combined Prediction Analysis")
+#     st.subheader("Combined Prediction Analysis")
     
-    if lr_pred == pytorch_pred:
-        st.write(f"Both models agree: The loan is likely to be **{'sanctioned' if lr_pred == 1.0 else 'rejected'}**.")
-    else:
-        st.write("The models have differing predictions:")
-        st.write(f"- Logistic Regression predicts: **{'Sanctioned' if lr_pred == 1.0 else 'Rejected'}**.")
-        st.write(f"- Neural Network predicts: **{'Sanctioned' if pytorch_pred == 1 else 'Rejected'}**.")
+#     if lr_pred == pytorch_pred:
+#         st.write(f"Both models agree: The loan is likely to be **{'sanctioned' if lr_pred == 1.0 else 'rejected'}**.")
+#     else:
+#         st.write("The models have differing predictions:")
+#         st.write(f"- Logistic Regression predicts: **{'Sanctioned' if lr_pred == 1.0 else 'Rejected'}**.")
+#         st.write(f"- Neural Network predicts: **{'Sanctioned' if pytorch_pred == 1 else 'Rejected'}**.")
     
-    # ---------------------------
-    # Additional Information Based on Eligibility Logic
-    # ---------------------------
+#     # ---------------------------
+#     # Additional Information Based on Eligibility Logic
+#     # ---------------------------
     
-    st.subheader("Eligibility Criteria Influence")
+#     st.subheader("Eligibility Criteria Influence")
     
-    if is_eligible:
-        st.write("Eligibility criteria indicate that the loan is eligible. Model predictions further support this decision.")
-    else:
-        st.write("Despite model predictions, eligibility criteria indicate that the loan should be **rejected** based on the following reasons:")
-        for reason in eligibility_reasons:
-            st.write(f"- {reason}")
+#     if is_eligible:
+#         st.write("Eligibility criteria indicate that the loan is eligible. Model predictions further support this decision.")
+#     else:
+#         st.write("Despite model predictions, eligibility criteria indicate that the loan should be **rejected** based on the following reasons:")
+#         for reason in eligibility_reasons:
+#             st.write(f"- {reason}")
 
 # ---------------------------
 # 3D Visualizations

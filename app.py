@@ -85,6 +85,7 @@ if uploaded_file is not None:
 else:
     st.warning("Please upload the `Loan_Default.csv` file to proceed.")
     st.stop()
+    st.balloons()
 
 # Load data using Spark
 df_spark = load_data_spark(data_path)
@@ -232,6 +233,7 @@ def train_pytorch_model(filepath):
 # Train PyTorch model
 with st.spinner("Training PyTorch model..."):
     pytorch_model = train_pytorch_model(data_path)
+    st.snow()
 st.success("PyTorch model trained and saved successfully.")
 
 # Load the pre-trained PyTorch model

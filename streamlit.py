@@ -12,7 +12,6 @@ import pandas as pd
 import plotly.express as px
 
 st.snow()
-
 # Streamlit configuration
 st.title("Loan Default Prediction App")
 st.write("This app uses both PySpark and PyTorch models for loan default prediction.")
@@ -23,6 +22,7 @@ os.environ['PYSPARK_DRIVER_PYTHON'] = r'C:\Users\GowthamMaheswar\AppData\Local\P
 
 # Function to initialize Spark and run Spark-related operations
 def run_spark_model():
+    sc = None  # Initialize sc to None
     try:
         # Create Spark configuration and context
         conf = SparkConf() \
@@ -85,7 +85,8 @@ def run_spark_model():
     except Exception as e:
         st.error(f"An error occurred: {e}")
     finally:
-        sc.stop()
+        if sc is not None:
+            sc.stop()  # Stop Spark context if it was initialized
 
 # Button to run Spark model
 if st.button("Run Spark Model"):
@@ -133,7 +134,7 @@ user_input_df = pd.DataFrame([user_input_dict])
 user_input_tensor = torch.tensor(user_input_df.values, dtype=torch.float32)
 
 # Load the pre-trained PyTorch model
-pytorch_model = torch.load('loan_prediction_model.pth')
+pytorch_model = torch.load('loan_prediction_model.pth', weights_only=True)
 pytorch_model.eval()  # Set the model to evaluation mode
 
 # Make prediction using PyTorch model
@@ -158,5 +159,5 @@ st.plotly_chart(fig_line)
 
 # 3D Scatter Plot
 fig_scatter = px.scatter_3d(sampled_df, x="loan_amount", y="rate_of_interest", z="income", 
-                            color='income', size='rate_of_interest', symbol='loan_amount')
+                             color='income', size='rate_of_interest', symbol='loan_amount')
 st.plotly_chart(fig_scatter)

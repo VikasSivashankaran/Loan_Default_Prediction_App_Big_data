@@ -1,11 +1,5 @@
-pyspark
 streamlit
-pandas
-numpy
-scikit-learn
-matplotlib
-seaborn
-plotly
-cufflinks
-pyarrow
+pyspark
 torch
+plotly
+pandas

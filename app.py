@@ -31,13 +31,38 @@ st.sidebar.header("User Input for Prediction")
 
 @st.cache_data
 def load_data_pandas(file):
-    df = pd.read_csv(file)
-    # Columns to impute
-    columns_to_impute = ['rate_of_interest', 'property_value', 'income', 'LTV']
-    # Impute missing values with column mean
-    imputer = SimpleImputer(strategy='mean')
-    df[columns_to_impute] = imputer.fit_transform(df[columns_to_impute])
-    return df
+    try:
+        # Attempt to read the CSV file
+        df = pd.read_csv(file)
+        
+        # Check if DataFrame is empty
+        if df.empty:
+            st.error("Uploaded CSV file is empty. Please upload a valid file.")
+            st.stop()
+        
+        # Columns to impute
+        columns_to_impute = ['rate_of_interest', 'property_value', 'income', 'LTV']
+        
+        # Verify if required columns exist
+        missing_columns = [col for col in columns_to_impute if col not in df.columns]
+        if missing_columns:
+            st.error(f"The following required columns are missing in the uploaded file: {missing_columns}")
+            st.stop()
+        
+        # Impute missing values with column mean
+        imputer = SimpleImputer(strategy='mean')
+        df[columns_to_impute] = imputer.fit_transform(df[columns_to_impute])
+        
+        return df
+    except pd.errors.EmptyDataError:
+        st.error("No columns to parse from the uploaded file. Please ensure it's a valid CSV with headers.")
+        st.stop()
+    except pd.errors.ParserError:
+        st.error("Error parsing the CSV file. Please ensure it's properly formatted.")
+        st.stop()
+    except Exception as e:
+        st.error(f"An unexpected error occurred while loading the file: {e}")
+        st.stop()
 
 # File uploader for Loan_Default.csv
 uploaded_file = st.sidebar.file_uploader("Upload Loan_Default.csv", type=["csv"])
@@ -45,7 +70,7 @@ uploaded_file = st.sidebar.file_uploader("Upload Loan_Default.csv", type=["csv"]
 if uploaded_file is not None:
     # Read uploaded file into pandas DataFrame
     df_pandas = load_data_pandas(uploaded_file)
-    st.success("CSV file uploaded successfully!")
+    st.success("CSV file uploaded and validated successfully!")
     st.balloons()
 else:
     st.warning("Please upload the `Loan_Default.csv` file to proceed.")
@@ -128,41 +153,45 @@ class SimpleModel(nn.Module):
 
 @st.cache_resource
 def train_pytorch_model(X, y):
-    # Convert to PyTorch tensors
-    X_tensor = torch.tensor(X, dtype=torch.float32)
-    y_tensor = torch.tensor(y.values, dtype=torch.long)
-    
-    # Create a DataLoader
-    dataset = torch.utils.data.TensorDataset(X_tensor, y_tensor)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True)
-    
-    # Create and train the model
-    input_dim = X.shape[1]  # Number of features
-    pytorch_model = SimpleModel(input_dim)
-    
-    # Define loss function and optimizer
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(pytorch_model.parameters(), lr=0.001)
-    
-    st.write("Starting PyTorch model training...")
-    st.snow()  # Trigger snow effect during training
-    
-    # Train the model
-    for epoch in range(10):  # Number of epochs
-        running_loss = 0.0
-        for inputs, labels in dataloader:
-            optimizer.zero_grad()
-            outputs = pytorch_model(inputs)
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
-            running_loss += loss.item()
-        avg_loss = running_loss / len(dataloader)
-        st.write(f'Epoch {epoch + 1}, Loss: {avg_loss:.4f}')
-    
-    # Save the trained PyTorch model
-    torch.save(pytorch_model.state_dict(), 'loan_prediction_model.pth')  # Save the model state_dict
-    return pytorch_model
+    try:
+        # Convert to PyTorch tensors
+        X_tensor = torch.tensor(X, dtype=torch.float32)
+        y_tensor = torch.tensor(y.values, dtype=torch.long)
+        
+        # Create a DataLoader
+        dataset = torch.utils.data.TensorDataset(X_tensor, y_tensor)
+        dataloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True)
+        
+        # Create and train the model
+        input_dim = X.shape[1]  # Number of features
+        pytorch_model = SimpleModel(input_dim)
+        
+        # Define loss function and optimizer
+        criterion = nn.CrossEntropyLoss()
+        optimizer = torch.optim.Adam(pytorch_model.parameters(), lr=0.001)
+        
+        st.write("Starting PyTorch model training...")
+        st.snow()  # Trigger snow effect during training
+        
+        # Train the model
+        for epoch in range(10):  # Number of epochs
+            running_loss = 0.0
+            for inputs, labels in dataloader:
+                optimizer.zero_grad()
+                outputs = pytorch_model(inputs)
+                loss = criterion(outputs, labels)
+                loss.backward()
+                optimizer.step()
+                running_loss += loss.item()
+            avg_loss = running_loss / len(dataloader)
+            st.write(f'Epoch {epoch + 1}, Loss: {avg_loss:.4f}')
+        
+        # Save the trained PyTorch model
+        torch.save(pytorch_model.state_dict(), 'loan_prediction_model.pth')  # Save the model state_dict
+        return pytorch_model
+    except Exception as e:
+        st.error(f"An error occurred during PyTorch model training: {e}")
+        st.stop()
 
 # Train PyTorch model
 with st.spinner("Training PyTorch model..."):
@@ -171,10 +200,14 @@ st.success("PyTorch model trained and saved successfully.")
 
 # Load the pre-trained PyTorch model
 def load_pytorch_model(filepath, input_dim):
-    model = SimpleModel(input_dim)
-    model.load_state_dict(torch.load(filepath))
-    model.eval()  # Set the model to evaluation mode
-    return model
+    try:
+        model = SimpleModel(input_dim)
+        model.load_state_dict(torch.load(filepath))
+        model.eval()  # Set the model to evaluation mode
+        return model
+    except Exception as e:
+        st.error(f"An error occurred while loading the PyTorch model: {e}")
+        st.stop()
 
 pytorch_model = load_pytorch_model('loan_prediction_model.pth', input_dim=6)
 
@@ -255,77 +288,86 @@ else:
 # Make Prediction Using Models
 # ---------------------------
 
-# if st.button("Make Prediction"):
-#     # Trigger a snow effect to indicate prediction is in progress
-#     st.snow()
+if st.button("Make Prediction"):
+    # Trigger a snow effect to indicate prediction is in progress
+    st.snow()
     
-#     # ---------------------------
-#     # Prediction Using Logistic Regression Model
-#     # ---------------------------
+    # ---------------------------
+    # Prediction Using Logistic Regression Model
+    # ---------------------------
     
-#     st.subheader("Prediction using Logistic Regression")
+    st.subheader("Prediction using Logistic Regression")
     
-#     # Preprocess the input
-#     input_scaled = scaler.transform(input_df)
+    try:
+        # Preprocess the input
+        input_scaled = scaler.transform(input_df)
+        
+        # Make prediction
+        lr_pred = lr.predict(input_scaled)[0]
+        
+        # Interpret the prediction
+        if lr_pred == 1:
+            lr_prediction_text = "The loan is likely to be **sanctioned**."
+        else:
+            lr_prediction_text = "The loan is likely to be **rejected**."
+        
+        st.write(lr_prediction_text)
+    except Exception as e:
+        st.error(f"An error occurred during Logistic Regression prediction: {e}")
     
-#     # Make prediction
-#     lr_pred = lr.predict(input_scaled)[0]
+    # ---------------------------
+    # Prediction Using PyTorch Model
+    # ---------------------------
     
-#     # Interpret the prediction
-#     if lr_pred == 1:
-#         lr_prediction_text = "The loan is likely to be **sanctioned**."
-#     else:
-#         lr_prediction_text = "The loan is likely to be **rejected**."
+    st.subheader("Prediction using Neural Network (PyTorch)")
     
-#     st.write(lr_prediction_text)
+    try:
+        # Convert user input into tensor for PyTorch
+        user_input_tensor = torch.tensor(input_scaled, dtype=torch.float32)
+        
+        # Make prediction using PyTorch model
+        with torch.no_grad():
+            output = pytorch_model(user_input_tensor)
+            pytorch_pred = torch.argmax(output, dim=1).item()  # Get the predicted class
+        
+        # Interpret the prediction
+        if pytorch_pred == 1:
+            pytorch_prediction_text = "The loan is likely to be **sanctioned**."
+        else:
+            pytorch_prediction_text = "The loan is likely to be **rejected**."
+        
+        st.write(pytorch_prediction_text)
+    except Exception as e:
+        st.error(f"An error occurred during PyTorch prediction: {e}")
     
-#     # ---------------------------
-#     # Prediction Using PyTorch Model
-#     # ---------------------------
+    # ---------------------------
+    # Combined Prediction Interpretation
+    # ---------------------------
     
-#     st.subheader("Prediction using Neural Network (PyTorch)")
+    st.subheader("Combined Prediction Analysis")
     
-#     # Convert user input into tensor for PyTorch
-#     user_input_tensor = torch.tensor(input_scaled, dtype=torch.float32)
+    try:
+        if lr_pred == pytorch_pred:
+            st.write(f"Both models agree: The loan is likely to be **{'sanctioned' if lr_pred == 1 else 'rejected'}**.")
+        else:
+            st.write("The models have differing predictions:")
+            st.write(f"- Logistic Regression predicts: **{'Sanctioned' if lr_pred == 1 else 'Rejected'}**.")
+            st.write(f"- Neural Network predicts: **{'Sanctioned' if pytorch_pred == 1 else 'Rejected'}**.")
+    except NameError:
+        st.error("Model predictions are not available.")
     
-#     # Make prediction using PyTorch model
-#     with torch.no_grad():
-#         output = pytorch_model(user_input_tensor)
-#         pytorch_pred = torch.argmax(output, dim=1).item()  # Get the predicted class
+    # ---------------------------
+    # Additional Information Based on Eligibility Logic
+    # ---------------------------
     
-#     # Interpret the prediction
-#     if pytorch_pred == 1:
-#         pytorch_prediction_text = "The loan is likely to be **sanctioned**."
-#     else:
-#         pytorch_prediction_text = "The loan is likely to be **rejected**."
+    st.subheader("Eligibility Criteria Influence")
     
-#     st.write(pytorch_prediction_text)
-    
-#     # ---------------------------
-#     # Combined Prediction Interpretation
-#     # ---------------------------
-    
-#     st.subheader("Combined Prediction Analysis")
-    
-#     if lr_pred == pytorch_pred:
-#         st.write(f"Both models agree: The loan is likely to be **{'sanctioned' if lr_pred == 1 else 'rejected'}**.")
-#     else:
-#         st.write("The models have differing predictions:")
-#         st.write(f"- Logistic Regression predicts: **{'Sanctioned' if lr_pred == 1 else 'Rejected'}**.")
-#         st.write(f"- Neural Network predicts: **{'Sanctioned' if pytorch_pred == 1 else 'Rejected'}**.")
-    
-#     # ---------------------------
-#     # Additional Information Based on Eligibility Logic
-#     # ---------------------------
-    
-#     st.subheader("Eligibility Criteria Influence")
-    
-#     if is_eligible:
-#         st.write("Eligibility criteria indicate that the loan is eligible. Model predictions further support this decision.")
-#     else:
-#         st.write("Despite model predictions, eligibility criteria indicate that the loan should be **rejected** based on the following reasons:")
-#         for reason in eligibility_reasons:
-#             st.write(f"- {reason}")
+    if is_eligible:
+        st.write("Eligibility criteria indicate that the loan is eligible. Model predictions further support this decision.")
+    else:
+        st.write("Despite model predictions, eligibility criteria indicate that the loan should be **rejected** based on the following reasons:")
+        for reason in eligibility_reasons:
+            st.write(f"- {reason}")
 
 # ---------------------------
 # 3D Visualizations
@@ -343,7 +385,12 @@ else:
     sampled_df = df_pandas.copy()
 
 # Drop rows with NaN in 'loan_amount', 'rate_of_interest', or 'age'
-sampled_df = sampled_df.dropna(subset=['loan_amount', 'rate_of_interest', 'age'])
+# Note: Ensure 'age' column exists; adjust accordingly
+if 'age' in sampled_df.columns:
+    sampled_df = sampled_df.dropna(subset=['loan_amount', 'rate_of_interest', 'age'])
+else:
+    st.warning("'age' column is missing from the dataset. 3D visualizations may not display correctly.")
+    sampled_df = sampled_df.dropna(subset=['loan_amount', 'rate_of_interest'])
 
 # Ensure that 'rate_of_interest' has no negative or zero values if required
 # For example, replace negative values with a small positive value to avoid size issues
@@ -355,8 +402,8 @@ fig_line = px.line_3d(
     sampled_df,
     x="loan_amount",
     y="rate_of_interest",
-    z="age",
-    title="3D Line Plot of Loan Amount, Rate of Interest, and Age"
+    z="age" if 'age' in sampled_df.columns else "loan_amount",  # Fallback if 'age' missing
+    title="3D Line Plot of Loan Amount, Rate of Interest, and Age" if 'age' in sampled_df.columns else "3D Line Plot of Loan Amount and Rate of Interest"
 )
 st.plotly_chart(fig_line, use_container_width=True)
 
@@ -366,11 +413,11 @@ fig_scatter = px.scatter_3d(
     sampled_df,
     x="loan_amount",
     y="rate_of_interest",
-    z="age", 
-    color='age',
+    z="age" if 'age' in sampled_df.columns else "loan_amount", 
+    color='age' if 'age' in sampled_df.columns else 'loan_amount',
     size='rate_of_interest',
     symbol='loan_amount',
-    title="3D Scatter Plot of Loan Amount, Rate of Interest, and Age"
+    title="3D Scatter Plot of Loan Amount, Rate of Interest, and Age" if 'age' in sampled_df.columns else "3D Scatter Plot of Loan Amount and Rate of Interest"
 )
 st.plotly_chart(fig_scatter, use_container_width=True)
 

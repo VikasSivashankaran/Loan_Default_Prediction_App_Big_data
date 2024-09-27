@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 import pandas as pd
 import plotly.express as px
+import atexit
 
 # ---------------------------
 # Streamlit App Configuration
@@ -59,11 +60,6 @@ sc, sql_context = initialize_spark()
 # ---------------------------
 
 @st.cache_data
-def load_data_spark(filepath):
-    df_spark = sql_context.read.csv(filepath, header=True, inferSchema=True)
-    return df_spark
-
-@st.cache_data
 def load_data_pandas(filepath):
     df = pd.read_csv(filepath)
     return df
@@ -81,13 +77,24 @@ else:
     st.stop()
 
 # Load data using Spark
+df_spark = load_data_spark = lambda filepath: sql_context.read.csv(filepath, header=True, inferSchema=True)(filepath)
 df_spark = load_data_spark(data_path)
 
 st.header("Dataset Schema")
-st.write(df_spark.printSchema())
+with st.expander("View Schema"):
+    # Capture the schema as a string
+    from io import StringIO
+    import sys
+
+    old_stdout = sys.stdout
+    sys.stdout = mystdout = StringIO()
+    df_spark.printSchema()
+    sys.stdout = old_stdout
+    schema_str = mystdout.getvalue()
+    st.text(schema_str)
 
 st.header("Sample Data")
-st.dataframe(df_spark.show(5))
+st.dataframe(df_spark.limit(5).toPandas())
 
 # ---------------------------
 # Data Preprocessing with PySpark
@@ -112,9 +119,9 @@ scaler = StandardScaler(inputCol='features', outputCol='scaled_features')
 pipeline = Pipeline(stages=[imputer, assembler, scaler])
 
 # Fit the pipeline to the data
-model = pipeline.fit(df_spark)
-df_transformed = model.transform(df_spark)
-
+with st.spinner("Preprocessing data..."):
+    model = pipeline.fit(df_spark)
+    df_transformed = model.transform(df_spark)
 st.success("Data preprocessing completed successfully.")
 
 # ---------------------------
@@ -123,8 +130,8 @@ st.success("Data preprocessing completed successfully.")
 
 train_data, test_data = df_transformed.randomSplit([0.8, 0.2], seed=42)
 
-st.write(f"Training Data Count: {train_data.count()}")
-st.write(f"Test Data Count: {test_data.count()}")
+st.write(f"**Training Data Count:** {train_data.count()}")
+st.write(f"**Test Data Count:** {test_data.count()}")
 
 # ---------------------------
 # Logistic Regression Model
@@ -136,8 +143,8 @@ st.header("Logistic Regression Model")
 lr = LogisticRegression(featuresCol='scaled_features', labelCol='Status')
 
 # Fit the model to training data
-lr_model = lr.fit(train_data)
-
+with st.spinner("Training Logistic Regression model..."):
+    lr_model = lr.fit(train_data)
 st.success("Logistic Regression model trained successfully.")
 
 # Make predictions on test data
@@ -310,5 +317,4 @@ st.plotly_chart(fig_scatter, use_container_width=True)
 def stop_spark():
     sc.stop()
 
-import atexit
 atexit.register(stop_spark)

@@ -381,7 +381,7 @@ if st.button("Make Prediction"):
 st.header("3D Visualizations")
 
 # Load data using pandas for visualization
-df_pandas = load_data_pandas(uploaded_file)
+df_pandas = load_data_pandas(data_path)
 
 # Sample 100 rows
 if len(df_pandas) >= 100:
@@ -390,12 +390,7 @@ else:
     sampled_df = df_pandas.copy()
 
 # Drop rows with NaN in 'loan_amount', 'rate_of_interest', or 'age'
-# Note: Ensure 'age' column exists; adjust accordingly
-if 'age' in sampled_df.columns:
-    sampled_df = sampled_df.dropna(subset=['loan_amount', 'rate_of_interest', 'age'])
-else:
-    st.warning("'age' column is missing from the dataset. 3D visualizations may not display correctly.")
-    sampled_df = sampled_df.dropna(subset=['loan_amount', 'rate_of_interest'])
+sampled_df = sampled_df.dropna(subset=['loan_amount', 'rate_of_interest', 'age'])
 
 # Ensure that 'rate_of_interest' has no negative or zero values if required
 # For example, replace negative values with a small positive value to avoid size issues
@@ -407,8 +402,8 @@ fig_line = px.line_3d(
     sampled_df,
     x="loan_amount",
     y="rate_of_interest",
-    z="age" if 'age' in sampled_df.columns else "loan_amount",  # Fallback if 'age' missing
-    title="3D Line Plot of Loan Amount, Rate of Interest, and Age" if 'age' in sampled_df.columns else "3D Line Plot of Loan Amount and Rate of Interest"
+    z="age",
+    title="3D Line Plot of Loan Amount, Rate of Interest, and Age"
 )
 st.plotly_chart(fig_line, use_container_width=True)
 
@@ -418,11 +413,11 @@ fig_scatter = px.scatter_3d(
     sampled_df,
     x="loan_amount",
     y="rate_of_interest",
-    z="age" if 'age' in sampled_df.columns else "loan_amount", 
-    color='age' if 'age' in sampled_df.columns else 'loan_amount',
+    z="age", 
+    color='age',
     size='rate_of_interest',
     symbol='loan_amount',
-    title="3D Scatter Plot of Loan Amount, Rate of Interest, and Age" if 'age' in sampled_df.columns else "3D Scatter Plot of Loan Amount and Rate of Interest"
+    title="3D Scatter Plot of Loan Amount, Rate of Interest, and Age"
 )
 st.plotly_chart(fig_scatter, use_container_width=True)
 

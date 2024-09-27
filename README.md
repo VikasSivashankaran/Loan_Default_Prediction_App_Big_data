@@ -4,12 +4,7 @@ Loan_Default_Prediction_App_Big_data
 
 libraries used:
 
-streamlit
-pyspark
-torch
-numpy
-pandas
-plotly
+streamlit, pyspark, torch, numpy, pandas, plotly
 
 Using LoanDefault dataset , pyspark and pytorch have been used to 
 make prediction with user inputs and also found the accuracy for that

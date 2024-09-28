@@ -14,6 +14,9 @@ st.markdown(
     .reportview-container {
         background: url('image.jpeg');
         background-size: cover;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+        color: white; /* Optional: change text color for better visibility */
     }
     </style>
     """,

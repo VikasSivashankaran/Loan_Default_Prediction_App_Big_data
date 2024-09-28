@@ -1,7 +1,7 @@
 import streamlit as st
 from pyspark import SparkConf, SparkContext
 from pyspark.sql import SQLContext
-from pyspark.ml.feature import SimpleImputer, VectorAssembler, StandardScaler
+from pyspark.ml.feature import Imputer, VectorAssembler, StandardScaler
 from pyspark.ml.classification import LogisticRegression
 from pyspark.ml import Pipeline
 from pyspark.ml.evaluation import BinaryClassificationEvaluator, MulticlassClassificationEvaluator
@@ -125,8 +125,8 @@ st.header("Data Preprocessing")
 columns_to_impute = ['rate_of_interest', 'property_value', 'income', 'LTV']
 output_columns = [f"{col}_imputed" for col in columns_to_impute]
 
-# Handle missing values using SimpleImputer
-imputer = SimpleImputer(inputCols=columns_to_impute, outputCols=output_columns, strategy="mean")
+# Handle missing values using Imputer
+imputer = Imputer(inputCols=columns_to_impute, outputCols=output_columns, strategy="mean")
 
 # Assemble features into a single vector
 assembler = VectorAssembler(

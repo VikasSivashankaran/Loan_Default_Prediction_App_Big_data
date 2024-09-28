@@ -35,7 +35,8 @@ st.sidebar.header("User Input for Prediction")
 
 @st.cache_resource
 def initialize_spark():
-    # Set the path to your Python executable
+    # Set the path to your Java JDK installation
+    os.environ['JAVA_HOME'] = r'C:\Program Files\Java\jdk1.8.0_202'
     os.environ['PYSPARK_PYTHON'] = r'C:\Users\GowthamMaheswar\AppData\Local\Programs\Python\Python312\python.exe'
     os.environ['PYSPARK_DRIVER_PYTHON'] = r'C:\Users\GowthamMaheswar\AppData\Local\Programs\Python\Python312\python.exe'
     
@@ -48,11 +49,15 @@ def initialize_spark():
         .set("spark.network.timeout", "800s") \
         .set("spark.executor.cores", "2")
     
-    sc = SparkContext.getOrCreate(conf=conf)
+    try:
+        sc = SparkContext.getOrCreate(conf=conf)
+    except Exception as e:
+        st.error(f"Failed to initialize Spark: {str(e)}")
     
     # Create SQLContext from SparkContext
     sql_context = SQLContext(sc)
     return sc, sql_context
+
 
 # Initialize Spark
 sc, sql_context = initialize_spark()

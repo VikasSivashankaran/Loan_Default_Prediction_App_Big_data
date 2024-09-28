@@ -237,30 +237,30 @@ fig1 = px.histogram(loan_data, x='loan_amount', color='Status', barmode='overlay
                     title="Distribution of Loan Amounts by Status")
 st.plotly_chart(fig1)
 
-# 2. Loan Status vs. Rate of Interest
-fig2 = px.box(loan_data, x='Status', y='rate_of_interest', color='Status',
-              title="Loan Status vs. Rate of Interest")
-st.plotly_chart(fig2)
+# 3D Line Plot
+st.subheader("3D Line Plot")
+fig_line = px.line_3d(
+    sampled_df,
+    x="loan_amount",
+    y="rate_of_interest",
+    z="age",
+    title="3D Line Plot of Loan Amount, Rate of Interest, and Age"
+)
+st.plotly_chart(fig_line, use_container_width=True)
 
-# 3. Loan Status vs. Property Value
-fig3 = px.box(loan_data, x='Status', y='property_value', color='Status',
-              title="Loan Status vs. Property Value")
-st.plotly_chart(fig3)
-
-# 4. Loan Status vs. Income
-fig4 = px.box(loan_data, x='Status', y='income', color='Status',
-              title="Loan Status vs. Income")
-st.plotly_chart(fig4)
-
-# 5. Loan Status vs. Credit Score
-fig5 = px.box(loan_data, x='Status', y='Credit_Score', color='Status',
-              title="Loan Status vs. Credit Score")
-st.plotly_chart(fig5)
-
-# 6. Loan Status vs. Loan-to-Value (LTV)
-fig6 = px.box(loan_data, x='Status', y='LTV', color='Status',
-              title="Loan Status vs. Loan-to-Value (LTV)")
-st.plotly_chart(fig6)
+# 3D Scatter Plot
+st.subheader("3D Scatter Plot")
+fig_scatter = px.scatter_3d(
+    sampled_df,
+    x="loan_amount",
+    y="rate_of_interest",
+    z="age", 
+    color='age',
+    size='rate_of_interest',
+    symbol='loan_amount',
+    title="3D Scatter Plot of Loan Amount, Rate of Interest, and Age"
+)
+st.plotly_chart(fig_scatter, use_container_width=True)
 
 # ---------------------------
 # Clean-up

@@ -290,7 +290,10 @@ fig = px.scatter_3d(predictions_df, x='loan_amount', y='property_value', z='inco
                      labels={'prediction': 'Prediction', 'loan_amount': 'Loan Amount', 'property_value': 'Property Value', 'income': 'Annual Income'},
                      title='3D Visualization of Predictions')
 st.plotly_chart(fig)
-
+fig = px.line_3d(predictions_df, x='loan_amount', y='property_value', z='income', color='prediction',
+                     labels={'prediction': 'Prediction', 'loan_amount': 'Loan Amount', 'property_value': 'Property Value', 'income': 'Annual Income'},
+                     title='3D Visualization of Predictions')
+st.plotly_chart(fig)
 # ---------------------------
 # Cleanup and Shutdown
 # ---------------------------

@@ -17,6 +17,7 @@ import sys
 # ---------------------------
 # Streamlit App Configuration
 # ---------------------------
+
 st.set_page_config(
     page_title="Loan Default Prediction",
     layout="wide",
@@ -34,8 +35,8 @@ st.sidebar.header("User Input for Prediction")
 
 @st.cache_resource
 def initialize_spark():
-    # Set the path to your Java and Python executables
-    os.environ['JAVA_HOME'] = r'C:\Program Files\Java\jdk1.8.0_202'  # Set your Java JDK path
+    # Set the path to your Java JDK installation
+    os.environ['JAVA_HOME'] = r'C:\Program Files\Java\jdk1.8.0_202'
     os.environ['PYSPARK_PYTHON'] = r'C:\Users\GowthamMaheswar\AppData\Local\Programs\Python\Python312\python.exe'
     os.environ['PYSPARK_DRIVER_PYTHON'] = r'C:\Users\GowthamMaheswar\AppData\Local\Programs\Python\Python312\python.exe'
     
@@ -48,11 +49,15 @@ def initialize_spark():
         .set("spark.network.timeout", "800s") \
         .set("spark.executor.cores", "2")
     
-    sc = SparkContext.getOrCreate(conf=conf)
+    try:
+        sc = SparkContext.getOrCreate(conf=conf)
+    except Exception as e:
+        st.error(f"Failed to initialize Spark: {str(e)}")
     
     # Create SQLContext from SparkContext
     sql_context = SQLContext(sc)
     return sc, sql_context
+
 
 # Initialize Spark
 sc, sql_context = initialize_spark()
@@ -252,36 +257,99 @@ st.header("Loan Eligibility Prediction")
 # Collect user input for prediction using Streamlit widgets
 def user_input_features():
     loan_amount = st.sidebar.number_input("Loan Amount", min_value=0.0, value=10000.0)
-    rate_of_interest = st.sidebar.number_input("Rate of Interest (%)", min_value=0.0, value=5.0)
+    rate_of_interest = st.sidebar.number_input("Rate of Interest", min_value=0.0, value=5.0)
     property_value = st.sidebar.number_input("Property Value", min_value=0.0, value=200000.0)
     income = st.sidebar.number_input("Income", min_value=0.0, value=50000.0)
-    credit_score = st.sidebar.number_input("Credit Score", min_value=0, max_value=850, value=700)
-    ltv = st.sidebar.number_input("Loan-to-Value Ratio (%)", min_value=0, max_value=100, value=80)
-    return [[loan_amount, rate_of_interest, property_value, income, credit_score, ltv]]
+    credit_score = st.sidebar.number_input("Credit Score", min_value=300, max_value=850, value=700)
+    ltv = st.sidebar.number_input("Loan-to-Value (LTV)", min_value=0.0, max_value=100.0, value=80.0)
+    
+    data = {
+        'loan_amount': loan_amount,
+        'rate_of_interest': rate_of_interest,
+        'property_value': property_value,
+        'income': income,
+        'Credit_Score': credit_score,
+        'LTV': ltv
+    }
+    features = pd.DataFrame([data])
+    return features
 
-input_data = user_input_features()
-input_df = pd.DataFrame(input_data, columns=['loan_amount', 'rate_of_interest', 'property_value', 'income', 'Credit_Score', 'LTV'])
+input_df = user_input_features()
 
-# Convert input data to tensor
-input_tensor = torch.tensor(input_df.values, dtype=torch.float32)
+# Display user input
+st.subheader("User Input Features")
+st.write(input_df)
 
-# Make predictions
+# Convert user input into tensor
+user_input_tensor = torch.tensor(input_df.values, dtype=torch.float32)
+
+# Make prediction using PyTorch model
 with torch.no_grad():
-    prediction = pytorch_model(input_tensor)
-    predicted_class = torch.argmax(prediction, dim=1).item()
+    output = pytorch_model(user_input_tensor)
+    predicted_class = torch.argmax(output, dim=1).item()  # Get the predicted class
 
-# Display prediction result
-if predicted_class == 0:
-    st.success("The loan is likely to be approved.")
+# Interpret the prediction
+if predicted_class == 1:
+    prediction_text = "The loan is likely to be **sanctioned**."
 else:
-    st.error("The loan is likely to be defaulted.")
+    prediction_text = "The loan is likely to be **rejected**."
+
+st.subheader("Prediction")
+st.write(prediction_text)
 
 # ---------------------------
-# Application Cleanup
+# 3D Visualizations
 # ---------------------------
-@atexit.register
-def cleanup():
-    if 'sc' in locals():
-        sc.stop()
-        print("Spark context stopped.")
 
+st.header("3D Visualizations")
+
+# Load data using pandas for visualization
+df_pandas = load_data_pandas(data_path)
+
+# Sample 100 rows
+if len(df_pandas) >= 100:
+    sampled_df = df_pandas.sample(n=100, random_state=42)
+else:
+    sampled_df = df_pandas.copy()
+
+# Drop rows with NaN in 'loan_amount', 'rate_of_interest', or 'age'
+sampled_df = sampled_df.dropna(subset=['loan_amount', 'rate_of_interest', 'age'])
+
+# Ensure that 'rate_of_interest' has no negative or zero values if required
+# For example, replace negative values with a small positive value to avoid size issues
+sampled_df['rate_of_interest'] = sampled_df['rate_of_interest'].apply(lambda x: x if x > 0 else 0.1)
+
+# 3D Line Plot
+st.subheader("3D Line Plot")
+fig_line = px.line_3d(
+    sampled_df,
+    x="loan_amount",
+    y="rate_of_interest",
+    z="age",
+    title="3D Line Plot of Loan Amount, Rate of Interest, and Age"
+)
+st.plotly_chart(fig_line, use_container_width=True)
+
+# 3D Scatter Plot
+st.subheader("3D Scatter Plot")
+fig_scatter = px.scatter_3d(
+    sampled_df,
+    x="loan_amount",
+    y="rate_of_interest",
+    z="age", 
+    color='age',
+    size='rate_of_interest',
+    symbol='loan_amount',
+    title="3D Scatter Plot of Loan Amount, Rate of Interest, and Age"
+)
+st.plotly_chart(fig_scatter, use_container_width=True)
+
+# ---------------------------
+# Cleanup
+# ---------------------------
+
+# Stop the SparkContext when the app stops
+def stop_spark():
+    sc.stop()
+
+atexit.register(stop_spark)

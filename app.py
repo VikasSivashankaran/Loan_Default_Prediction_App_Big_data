@@ -17,7 +17,6 @@ import sys
 # ---------------------------
 # Streamlit App Configuration
 # ---------------------------
-
 st.set_page_config(
     page_title="Loan Default Prediction",
     layout="wide",
@@ -32,7 +31,6 @@ st.sidebar.header("User Input for Prediction")
 # ---------------------------
 # Spark Configuration and Initialization
 # ---------------------------
-
 @st.cache_resource
 def initialize_spark():
     # Set the path to your Python executable
@@ -60,7 +58,6 @@ sc, sql_context = initialize_spark()
 # ---------------------------
 # Data Loading and Display
 # ---------------------------
-
 st.header("Dataset Schema")
 
 # Define the path to your CSV file
@@ -75,29 +72,25 @@ if not os.path.exists(DATA_PATH):
 @st.cache_data
 def load_data_spark(filepath):
     df_spark = sql_context.read.csv(filepath, header=True, inferSchema=True)
-    return df_spark
+    return df_spark.toPandas()  # Collect the DataFrame to Pandas
 
-df_spark = load_data_spark(DATA_PATH)
+df_pandas = load_data_spark(DATA_PATH)
 
 # Display the schema
 with st.expander("View Schema"):
-    # Capture the schema as a string
-    old_stdout = sys.stdout
-    sys.stdout = mystdout = StringIO()
-    df_spark.printSchema()
-    sys.stdout = old_stdout
-    schema_str = mystdout.getvalue()
-    st.text(schema_str)
+    st.text(df_pandas.dtypes)
 
 # Display sample data
 st.header("Sample Data")
-st.dataframe(df_spark.limit(5).toPandas())
+st.dataframe(df_pandas.head())
 
 # ---------------------------
 # Data Preprocessing with PySpark
 # ---------------------------
-
 st.header("Data Preprocessing")
+
+# Convert to Spark DataFrame for preprocessing
+df_spark = sql_context.createDataFrame(df_pandas)
 
 columns_to_impute = ['rate_of_interest', 'property_value', 'income', 'LTV']
 output_columns = columns_to_impute
@@ -124,7 +117,6 @@ st.success("Data preprocessing completed successfully.")
 # ---------------------------
 # Train-Test Split
 # ---------------------------
-
 train_data, test_data = df_transformed.randomSplit([0.8, 0.2], seed=42)
 
 st.write(f"**Training Data Count:** {train_data.count()}")
@@ -133,7 +125,6 @@ st.write(f"**Test Data Count:** {test_data.count()}")
 # ---------------------------
 # Logistic Regression Model
 # ---------------------------
-
 st.header("Logistic Regression Model")
 
 # Logistic Regression model
@@ -163,7 +154,6 @@ col2.metric("Accuracy", f"{accuracy:.4f}")
 # ---------------------------
 # PyTorch Model Definition and Training
 # ---------------------------
-
 st.header("PyTorch Neural Network Model")
 
 class SimpleModel(nn.Module):
@@ -238,7 +228,6 @@ pytorch_model = load_pytorch_model('loan_prediction_model.pth', input_dim=6)
 # ---------------------------
 # User Input for Prediction
 # ---------------------------
-
 st.header("Loan Eligibility Prediction")
 
 # Collect user input for prediction using Streamlit widgets
@@ -258,122 +247,24 @@ def user_input_features():
         'Credit_Score': credit_score,
         'LTV': ltv
     }
-    features = pd.DataFrame([data])
+    
+    features = pd.DataFrame(data, index=[0])
     return features
 
-input_df = user_input_features()
+input_features = user_input_features()
 
-# Display user input
-st.subheader("User Input Features")
-st.write(input_df)
-
-# Convert user input into tensor
-user_input_tensor = torch.tensor(input_df.values, dtype=torch.float32)
-
-# Make prediction using PyTorch model
+# Make predictions using the PyTorch model
+input_tensor = torch.tensor(input_features.values, dtype=torch.float32)
 with torch.no_grad():
-    output = pytorch_model(user_input_tensor)
-    predicted_class = torch.argmax(output, dim=1).item()  # Get the predicted class
+    prediction = pytorch_model(input_tensor)
+    predicted_class = prediction.argmax(dim=1).item()  # Get the index of the max log-probability
 
-# Interpret the prediction
+# Display prediction results
+st.subheader("Prediction Results")
 if predicted_class == 1:
-    prediction_text = "The loan is likely to be **sanctioned**."
+    st.write("The loan is likely to be defaulted.")
 else:
-    prediction_text = "The loan is likely to be **rejected**."
+    st.write("The loan is likely to be repaid.")
 
-st.subheader("Prediction")
-st.write(prediction_text)
-
-# ---------------------------
-# 3D Visualizations
-# ---------------------------
-
-st.header("3D Visualizations")
-
-# Load data using pandas for visualization
-@st.cache_data
-def load_data_pandas(filepath):
-    df = pd.read_csv(filepath)
-    # Columns to impute
-    columns_to_impute = ['rate_of_interest', 'property_value', 'income', 'LTV']
-    # Impute missing values with column mean
-    df[columns_to_impute] = df[columns_to_impute].fillna(df[columns_to_impute].mean())
-    return df
-
-df_pandas = load_data_pandas(DATA_PATH)
-
-# Sample 100 rows
-if len(df_pandas) >= 100:
-    sampled_df = df_pandas.sample(n=100, random_state=42)
-else:
-    sampled_df = df_pandas.copy()
-
-# Drop rows with NaN in 'loan_amount', 'rate_of_interest', or 'age'
-# Note: Ensure 'age' is a column in your dataset. If not, adjust accordingly.
-if 'age' in sampled_df.columns:
-    sampled_df = sampled_df.dropna(subset=['loan_amount', 'rate_of_interest', 'age'])
-else:
-    # If 'age' column does not exist, choose another relevant column or skip this step
-    sampled_df = sampled_df.dropna(subset=['loan_amount', 'rate_of_interest'])
-
-# Ensure that 'rate_of_interest' has no negative or zero values if required
-# For example, replace negative values with a small positive value to avoid size issues
-sampled_df['rate_of_interest'] = sampled_df['rate_of_interest'].apply(lambda x: x if x > 0 else 0.1)
-
-# 3D Line Plot
-st.subheader("3D Line Plot")
-if 'age' in sampled_df.columns:
-    fig_line = px.line_3d(
-        sampled_df,
-        x="loan_amount",
-        y="rate_of_interest",
-        z="age",
-        title="3D Line Plot of Loan Amount, Rate of Interest, and Age"
-    )
-else:
-    # If 'age' column does not exist, use another column or notify the user
-    fig_line = px.line_3d(
-        sampled_df,
-        x="loan_amount",
-        y="rate_of_interest",
-        z="loan_amount",  # Using 'loan_amount' again as a placeholder
-        title="3D Line Plot of Loan Amount, Rate of Interest, and Loan Amount"
-    )
-st.plotly_chart(fig_line, use_container_width=True)
-
-# 3D Scatter Plot
-st.subheader("3D Scatter Plot")
-if 'age' in sampled_df.columns:
-    fig_scatter = px.scatter_3d(
-        sampled_df,
-        x="loan_amount",
-        y="rate_of_interest",
-        z="age", 
-        color='age',
-        size='rate_of_interest',
-        symbol='loan_amount',
-        title="3D Scatter Plot of Loan Amount, Rate of Interest, and Age"
-    )
-else:
-    # If 'age' column does not exist, use another column or notify the user
-    fig_scatter = px.scatter_3d(
-        sampled_df,
-        x="loan_amount",
-        y="rate_of_interest",
-        z="loan_amount",  # Using 'loan_amount' again as a placeholder
-        color='loan_amount',
-        size='rate_of_interest',
-        symbol='loan_amount',
-        title="3D Scatter Plot of Loan Amount, Rate of Interest, and Loan Amount"
-    )
-st.plotly_chart(fig_scatter, use_container_width=True)
-
-# ---------------------------
-# Cleanup
-# ---------------------------
-
-# Stop the SparkContext when the app stops
-def stop_spark():
-    sc.stop()
-
-atexit.register(stop_spark)
+# Clean up Spark context at exit
+atexit.register(lambda: sc.stop())

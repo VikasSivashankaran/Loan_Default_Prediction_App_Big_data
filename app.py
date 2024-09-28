@@ -35,12 +35,7 @@ st.sidebar.header("User Input for Prediction")
 
 @st.cache_resource
 def initialize_spark():
-    # Set the path to your Java JDK installation
-    os.environ['JAVA_HOME'] = r'C:\Program Files\Java\jdk1.8.0_202'
-    os.environ['PYSPARK_PYTHON'] = r'C:\Users\GowthamMaheswar\AppData\Local\Programs\Python\Python312\python.exe'
-    os.environ['PYSPARK_DRIVER_PYTHON'] = r'C:\Users\GowthamMaheswar\AppData\Local\Programs\Python\Python312\python.exe'
-    
-    # Create Spark configuration and context
+    # Initialize Spark without specifying Java paths
     conf = SparkConf() \
         .setAppName('Loan_Default_Prediction') \
         .setMaster("local[*]") \
@@ -51,13 +46,11 @@ def initialize_spark():
     
     try:
         sc = SparkContext.getOrCreate(conf=conf)
+        sql_context = SQLContext(sc)
+        return sc, sql_context
     except Exception as e:
         st.error(f"Failed to initialize Spark: {str(e)}")
-    
-    # Create SQLContext from SparkContext
-    sql_context = SQLContext(sc)
-    return sc, sql_context
-
+        st.stop()
 
 # Initialize Spark
 sc, sql_context = initialize_spark()

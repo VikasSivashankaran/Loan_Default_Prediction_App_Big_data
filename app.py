@@ -30,6 +30,21 @@ st.title("Loan Default Prediction Application")
 st.sidebar.header("User Input for Prediction")
 
 # ---------------------------
+# Set Java Path for PySpark
+# ---------------------------
+
+@st.cache_resource
+def setup_java_environment():
+    """
+    Sets up the Java environment by defining the JAVA_HOME variable dynamically.
+    """
+    java_home_path = r"C:\Program Files\Java\jdk1.8.0_202"  # Update with your JDK path
+    os.environ['JAVA_HOME'] = java_home_path
+    os.environ['PATH'] = java_home_path + r"\bin;" + os.environ['PATH']
+
+setup_java_environment()
+
+# ---------------------------
 # Spark Configuration and Initialization
 # ---------------------------
 
@@ -248,140 +263,11 @@ def train_pytorch_model(filepath):
     torch.save(pytorch_model.state_dict(), 'loan_prediction_model.pth')  # Save the model state_dict
     return pytorch_model
 
-# Train PyTorch model
+# Train the PyTorch model
 with st.spinner("Training PyTorch model..."):
     pytorch_model = train_pytorch_model(data_path)
-    st.snow()
 st.success("PyTorch model trained and saved successfully.")
 
-# Load the pre-trained PyTorch model
-def load_pytorch_model(filepath, input_dim):
-    """
-    Loads the trained PyTorch model from the specified filepath.
-    """
-    model = SimpleModel(input_dim)
-    model.load_state_dict(torch.load(filepath, map_location=torch.device('cpu')))
-    model.eval()  # Set the model to evaluation mode
-    return model
-
-pytorch_model = load_pytorch_model('loan_prediction_model.pth', input_dim=6)
-
 # ---------------------------
-# User Input for Prediction
+# End of Application
 # ---------------------------
-
-st.header("Loan Eligibility Prediction")
-
-# Collect user input for prediction using Streamlit widgets
-def user_input_features():
-    loan_amount = st.sidebar.number_input("Loan Amount", min_value=0.0, value=10000.0)
-    rate_of_interest = st.sidebar.number_input("Rate of Interest", min_value=0.0, value=5.0)
-    property_value = st.sidebar.number_input("Property Value", min_value=0.0, value=200000.0)
-    income = st.sidebar.number_input("Income", min_value=0.0, value=50000.0)
-    credit_score = st.sidebar.number_input("Credit Score", min_value=300, max_value=850, value=700)
-    ltv = st.sidebar.number_input("Loan-to-Value (LTV)", min_value=0.0, max_value=100.0, value=80.0)
-    
-    data = {
-        'loan_amount': loan_amount,
-        'rate_of_interest': rate_of_interest,
-        'property_value': property_value,
-        'income': income,
-        'Credit_Score': credit_score,
-        'LTV': ltv
-    }
-    features = pd.DataFrame([data])
-    return features
-
-input_df = user_input_features()
-
-# Display user input
-st.subheader("User Input Features")
-st.write(input_df)
-
-# Convert user input into tensor
-user_input_tensor = torch.tensor(input_df.values, dtype=torch.float32)
-
-# Make prediction using PyTorch model
-with torch.no_grad():
-    output = pytorch_model(user_input_tensor)
-    predicted_class = torch.argmax(output, dim=1).item()  # Get the predicted class
-
-# Interpret the prediction
-if predicted_class == 1:
-    prediction_text = "The loan is likely to be **sanctioned**."
-else:
-    prediction_text = "The loan is likely to be **rejected**."
-
-st.subheader("Prediction")
-st.write(prediction_text)
-
-# ---------------------------
-# 3D Visualizations
-# ---------------------------
-
-st.header("3D Visualizations")
-
-# Load data using pandas for visualization
-df_pandas = load_data_pandas(data_path)
-
-# Sample 100 rows
-if len(df_pandas) >= 100:
-    sampled_df = df_pandas.sample(n=100, random_state=42)
-else:
-    sampled_df = df_pandas.copy()
-
-# Drop rows with NaN in 'loan_amount', 'rate_of_interest', or 'age'
-sampled_df = sampled_df.dropna(subset=['loan_amount', 'rate_of_interest', 'age'])
-
-# Ensure that 'rate_of_interest' has no negative or zero values if required
-# For example, replace negative values with a small positive value to avoid size issues
-sampled_df['rate_of_interest'] = sampled_df['rate_of_interest'].apply(lambda x: x if x > 0 else 0.1)
-
-# 3D Line Plot
-st.subheader("3D Line Plot")
-fig_line = px.line_3d(
-    sampled_df,
-    x="loan_amount",
-    y="rate_of_interest",
-    z="age",
-    title="3D Line Plot of Loan Amount, Rate of Interest, and Age"
-)
-st.plotly_chart(fig_line, use_container_width=True)
-
-# 3D Scatter Plot
-st.subheader("3D Scatter Plot")
-fig_scatter = px.scatter_3d(
-    sampled_df,
-    x="loan_amount",
-    y="rate_of_interest",
-    z="age", 
-    color='age',
-    size='rate_of_interest',
-    symbol='loan_amount',
-    title="3D Scatter Plot of Loan Amount, Rate of Interest, and Age"
-)
-st.plotly_chart(fig_scatter, use_container_width=True)
-
-# ---------------------------
-# Cleanup
-# ---------------------------
-
-# Stop the SparkContext when the app stops
-def stop_spark():
-    sc.stop()
-
-atexit.register(stop_spark)
-
-# ---------------------------
-# Footer or Additional Information
-# ---------------------------
-
-st.markdown("""
----
-**Technologies Used:**
-- [Streamlit](https://streamlit.io/)
-- [PySpark](https://spark.apache.org/docs/latest/api/python/index.html)
-- [PyTorch](https://pytorch.org/)
-- [Pandas](https://pandas.pydata.org/)
-- [Plotly](https://plotly.com/)
-""")

@@ -1,5 +1,6 @@
+
 streamlit
-pyspark
-torch
 pandas
+torch
+scikit-learn
 plotly

@@ -27,6 +27,7 @@ if uploaded_file is not None:
     data_path = "Loan_Default.csv"
     with open(data_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
+    st.snow()  # Snow effect when the file is uploaded
 else:
     st.warning("Please upload the `Loan_Default.csv` file to proceed.")
     st.stop()
@@ -164,11 +165,23 @@ with torch.no_grad():
     output = pytorch_model(user_input_tensor)
     predicted_class = torch.argmax(output, dim=1).item()  # Get the predicted class
 
-# Interpret the prediction
-if predicted_class == 1:
-    prediction_text = "The loan is likely to be **sanctioned**."
+# Apply custom logic for prediction
+low_income_threshold = 30000  # Example threshold
+high_loan_threshold = 200000  # Example threshold
+low_property_value_threshold = 100000  # Example threshold
+
+if (input_df['income'].values[0] < low_income_threshold and 
+    input_df['loan_amount'].values[0] > high_loan_threshold and 
+    input_df['property_value'].values[0] < low_property_value_threshold):
+    predicted_class = 0  # Reject loan
+    st.warning("Based on the criteria, the loan is likely to be **rejected**.")
+    st.snow()  # Add snow effect if the loan is rejected
 else:
-    prediction_text = "The loan is likely to be **rejected**."
+    if predicted_class == 1:
+        prediction_text = "The loan is likely to be **sanctioned**."
+        st.balloons()  # Add balloons effect if the loan is sanctioned
+    else:
+        prediction_text = "The loan is likely to be **rejected**."
 
 st.subheader("Prediction")
 st.write(prediction_text)

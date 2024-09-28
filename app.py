@@ -9,22 +9,23 @@ import os
 import torch
 import torch.nn as nn
 import pandas as pd
-import plotly.express as px
-import atexit
-from io import StringIO
 import sys
+from io import StringIO
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+import seaborn as sns
 
 # ---------------------------
 # Streamlit App Configuration
 # ---------------------------
 
 st.set_page_config(
-    page_title="Loan Default Prediction",
+    page_title="Loan Default Prediction with 3D Plot",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-st.title("Loan Default Prediction Application")
+st.title("Loan Default Prediction Application with 3D Plot")
 
 # Sidebar for user inputs
 st.sidebar.header("User Input for Prediction")
@@ -33,7 +34,6 @@ st.sidebar.header("User Input for Prediction")
 # Set Java Path for PySpark
 # ---------------------------
 
-@st.cache_resource
 def setup_java_environment():
     """
     Sets up the Java environment by defining the JAVA_HOME variable dynamically.
@@ -48,7 +48,6 @@ setup_java_environment()
 # Spark Configuration and Initialization
 # ---------------------------
 
-@st.cache_resource
 def initialize_spark():
     """
     Initializes and returns SparkContext and SQLContext.
@@ -82,7 +81,6 @@ sc, sql_context = initialize_spark()
 # Data Loading and Display
 # ---------------------------
 
-@st.cache_data
 def load_data_pandas(filepath):
     """
     Loads data into a Pandas DataFrame and imputes missing values.
@@ -112,8 +110,6 @@ if uploaded_file is not None:
 else:
     st.warning("Please upload the `Loan_Default.csv` file to proceed.")
     st.stop()
-
-st.balloons()
 
 # Load data using Spark
 df_spark = load_data_spark(data_path)
@@ -201,6 +197,40 @@ col1.metric("ROC-AUC", f"{roc_auc:.4f}")
 col2.metric("Accuracy", f"{accuracy:.4f}")
 
 # ---------------------------
+# 3D Plot Section
+# ---------------------------
+
+st.header("3D Plot of Loan Data")
+
+def plot_3d(df):
+    """
+    Plots a 3D scatter plot for loan_amount, income, and property_value.
+    """
+    fig = plt.figure(figsize=(10, 7))
+    ax = fig.add_subplot(111, projection='3d')
+
+    # Scatter plot data
+    x = df['loan_amount'].toPandas()
+    y = df['income'].toPandas()
+    z = df['property_value'].toPandas()
+
+    # Color by credit score (assuming higher credit score means safer loans)
+    color_map = df['Credit_Score'].toPandas()
+    
+    scatter = ax.scatter(x, y, z, c=color_map, cmap='coolwarm')
+
+    ax.set_xlabel('Loan Amount')
+    ax.set_ylabel('Income')
+    ax.set_zlabel('Property Value')
+
+    plt.colorbar(scatter, label='Credit Score')
+
+    st.pyplot(fig)
+
+# Call the 3D plot function
+plot_3d(df_transformed)
+
+# ---------------------------
 # PyTorch Model Definition and Training
 # ---------------------------
 
@@ -214,7 +244,6 @@ class SimpleModel(nn.Module):
     def forward(self, x):
         return self.fc(x)
 
-@st.cache_resource
 def train_pytorch_model(filepath):
     """
     Trains a simple PyTorch neural network model on the dataset.
@@ -237,36 +266,30 @@ def train_pytorch_model(filepath):
     # Create a DataLoader
     dataset = torch.utils.data.TensorDataset(X_tensor, y_tensor)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True)
-    
-    # Create and train the model
-    input_dim = X.shape[1]  # Number of features
-    pytorch_model = SimpleModel(input_dim)
-    
-    # Define loss function and optimizer
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(pytorch_model.parameters(), lr=0.001)
-    
-    # Train the model
-    for epoch in range(10):  # Number of epochs
-        running_loss = 0.0
-        for inputs, labels in dataloader:
+
+    # Initialize the model
+    model = SimpleModel(X.shape[1])
+    loss_fn = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
+    # Training loop
+    epochs = 10
+    for epoch in range(epochs):
+        for inputs, targets in dataloader:
             optimizer.zero_grad()
-            outputs = pytorch_model(inputs)
-            loss = criterion(outputs, labels)
+            outputs = model(inputs)
+            loss = loss_fn(outputs, targets)
             loss.backward()
             optimizer.step()
-            running_loss += loss.item()
-        avg_loss = running_loss / len(dataloader)
-        st.write(f'Epoch {epoch + 1}, Loss: {avg_loss:.4f}')
-    
-    # Save the trained PyTorch model
-    torch.save(pytorch_model.state_dict(), 'loan_prediction_model.pth')  # Save the model state_dict
-    return pytorch_model
+
+    # Save the model after training
+    torch.save(model.state_dict(), "pytorch_model.pth")
+    return model
 
 # Train the PyTorch model
-with st.spinner("Training PyTorch model..."):
+if st.button("Train PyTorch Model"):
     pytorch_model = train_pytorch_model(data_path)
-st.success("PyTorch model trained and saved successfully.")
+    st.success("PyTorch model trained and saved successfully.")
 
 # ---------------------------
 # End of Application

@@ -7,6 +7,19 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 import plotly.express as px
 
+# Set the background image
+st.markdown(
+    """
+    <style>
+    .reportview-container {
+        background: url('image.jpeg');
+        background-size: cover;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 # ---------------------------
 # Data Loading and Display
 # ---------------------------
@@ -27,7 +40,9 @@ if uploaded_file is not None:
     data_path = "Loan_Default.csv"
     with open(data_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
-    st.snow()  # Snow effect when the file is uploaded
+    
+    # Show balloon effect after file upload
+    st.balloons()  
 else:
     st.warning("Please upload the `Loan_Default.csv` file to proceed.")
     st.stop()
@@ -226,13 +241,5 @@ fig_scatter = px.scatter_3d(
 )
 st.plotly_chart(fig_scatter, use_container_width=True)
 
-# ---------------------------
-# Adding Image to the Right Side
-# ---------------------------
-col1, col2 = st.columns([2, 1])  # Two columns: 2/3 for content, 1/3 for image
 
-with col1:
-    st.write("This area can contain your app content.")
 
-with col2:
-    st.image("image.jpg", caption="Loan Prediction App Image", use_column_width=True)  # Replace with your image path

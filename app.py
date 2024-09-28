@@ -61,36 +61,25 @@ sc, sql_context = initialize_spark()
 # Data Loading and Display
 # ---------------------------
 
-@st.cache_data
-def load_data_pandas(filepath):
-    df = pd.read_csv(filepath)
-    # Columns to impute
-    columns_to_impute = ['rate_of_interest', 'property_value', 'income', 'LTV']
-    # Impute missing values with column mean
-    df[columns_to_impute] = df[columns_to_impute].fillna(df[columns_to_impute].mean())
-    return df
+st.header("Dataset Schema")
 
+# Define the path to your CSV file
+DATA_PATH = 'Loan_Default.csv'  # Update this path if your CSV is located elsewhere
+
+# Check if the file exists
+if not os.path.exists(DATA_PATH):
+    st.error(f"The file `{DATA_PATH}` was not found. Please ensure it exists in the application directory.")
+    st.stop()
+
+# Load data using Spark
+@st.cache_data
 def load_data_spark(filepath):
     df_spark = sql_context.read.csv(filepath, header=True, inferSchema=True)
     return df_spark
 
-# File uploader for Loan_Default.csv
-uploaded_file = st.sidebar.file_uploader("Upload Loan_Default.csv", type=["csv"])
+df_spark = load_data_spark(DATA_PATH)
 
-if uploaded_file is not None:
-    # Save uploaded file to a temporary location
-    with open("Loan_Default.csv", "wb") as f:
-        f.write(uploaded_file.getbuffer())
-    data_path = "Loan_Default.csv"
-else:
-    st.warning("Please upload the `Loan_Default.csv` file to proceed.")
-    st.stop()
-st.balloons()
-
-# Load data using Spark
-df_spark = load_data_spark(data_path)
-
-st.header("Dataset Schema")
+# Display the schema
 with st.expander("View Schema"):
     # Capture the schema as a string
     old_stdout = sys.stdout
@@ -100,6 +89,7 @@ with st.expander("View Schema"):
     schema_str = mystdout.getvalue()
     st.text(schema_str)
 
+# Display sample data
 st.header("Sample Data")
 st.dataframe(df_spark.limit(5).toPandas())
 
@@ -232,7 +222,7 @@ def train_pytorch_model(filepath):
 
 # Train PyTorch model
 with st.spinner("Training PyTorch model..."):
-    pytorch_model = train_pytorch_model(data_path)
+    pytorch_model = train_pytorch_model(DATA_PATH)
     st.snow()
 st.success("PyTorch model trained and saved successfully.")
 
@@ -301,7 +291,16 @@ st.write(prediction_text)
 st.header("3D Visualizations")
 
 # Load data using pandas for visualization
-df_pandas = load_data_pandas(data_path)
+@st.cache_data
+def load_data_pandas(filepath):
+    df = pd.read_csv(filepath)
+    # Columns to impute
+    columns_to_impute = ['rate_of_interest', 'property_value', 'income', 'LTV']
+    # Impute missing values with column mean
+    df[columns_to_impute] = df[columns_to_impute].fillna(df[columns_to_impute].mean())
+    return df
+
+df_pandas = load_data_pandas(DATA_PATH)
 
 # Sample 100 rows
 if len(df_pandas) >= 100:
@@ -310,7 +309,12 @@ else:
     sampled_df = df_pandas.copy()
 
 # Drop rows with NaN in 'loan_amount', 'rate_of_interest', or 'age'
-sampled_df = sampled_df.dropna(subset=['loan_amount', 'rate_of_interest', 'age'])
+# Note: Ensure 'age' is a column in your dataset. If not, adjust accordingly.
+if 'age' in sampled_df.columns:
+    sampled_df = sampled_df.dropna(subset=['loan_amount', 'rate_of_interest', 'age'])
+else:
+    # If 'age' column does not exist, choose another relevant column or skip this step
+    sampled_df = sampled_df.dropna(subset=['loan_amount', 'rate_of_interest'])
 
 # Ensure that 'rate_of_interest' has no negative or zero values if required
 # For example, replace negative values with a small positive value to avoid size issues
@@ -318,27 +322,50 @@ sampled_df['rate_of_interest'] = sampled_df['rate_of_interest'].apply(lambda x: 
 
 # 3D Line Plot
 st.subheader("3D Line Plot")
-fig_line = px.line_3d(
-    sampled_df,
-    x="loan_amount",
-    y="rate_of_interest",
-    z="age",
-    title="3D Line Plot of Loan Amount, Rate of Interest, and Age"
-)
+if 'age' in sampled_df.columns:
+    fig_line = px.line_3d(
+        sampled_df,
+        x="loan_amount",
+        y="rate_of_interest",
+        z="age",
+        title="3D Line Plot of Loan Amount, Rate of Interest, and Age"
+    )
+else:
+    # If 'age' column does not exist, use another column or notify the user
+    fig_line = px.line_3d(
+        sampled_df,
+        x="loan_amount",
+        y="rate_of_interest",
+        z="loan_amount",  # Using 'loan_amount' again as a placeholder
+        title="3D Line Plot of Loan Amount, Rate of Interest, and Loan Amount"
+    )
 st.plotly_chart(fig_line, use_container_width=True)
 
 # 3D Scatter Plot
 st.subheader("3D Scatter Plot")
-fig_scatter = px.scatter_3d(
-    sampled_df,
-    x="loan_amount",
-    y="rate_of_interest",
-    z="age", 
-    color='age',
-    size='rate_of_interest',
-    symbol='loan_amount',
-    title="3D Scatter Plot of Loan Amount, Rate of Interest, and Age"
-)
+if 'age' in sampled_df.columns:
+    fig_scatter = px.scatter_3d(
+        sampled_df,
+        x="loan_amount",
+        y="rate_of_interest",
+        z="age", 
+        color='age',
+        size='rate_of_interest',
+        symbol='loan_amount',
+        title="3D Scatter Plot of Loan Amount, Rate of Interest, and Age"
+    )
+else:
+    # If 'age' column does not exist, use another column or notify the user
+    fig_scatter = px.scatter_3d(
+        sampled_df,
+        x="loan_amount",
+        y="rate_of_interest",
+        z="loan_amount",  # Using 'loan_amount' again as a placeholder
+        color='loan_amount',
+        size='rate_of_interest',
+        symbol='loan_amount',
+        title="3D Scatter Plot of Loan Amount, Rate of Interest, and Loan Amount"
+    )
 st.plotly_chart(fig_scatter, use_container_width=True)
 
 # ---------------------------

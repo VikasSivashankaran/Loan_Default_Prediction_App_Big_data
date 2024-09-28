@@ -15,9 +15,25 @@ from io import StringIO
 import sys
 
 # ---------------------------
+# Streamlit App Configuration
+# ---------------------------
+
+st.set_page_config(
+    page_title="Loan Default Prediction",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+st.title("Loan Default Prediction Application")
+
+# Sidebar for user inputs
+st.sidebar.header("User Input for Prediction")
+
+# ---------------------------
 # Spark Configuration and Initialization
 # ---------------------------
 
+@st.cache_resource
 def initialize_spark():
     # Set the path to your Python executable
     os.environ['PYSPARK_PYTHON'] = r'C:\Users\GowthamMaheswar\AppData\Local\Programs\Python\Python312\python.exe'
@@ -40,27 +56,6 @@ def initialize_spark():
 
 # Initialize Spark
 sc, sql_context = initialize_spark()
-
-# Stop the SparkContext when the app stops
-def stop_spark():
-    sc.stop()
-
-atexit.register(stop_spark)
-
-# ---------------------------
-# Streamlit App Configuration
-# ---------------------------
-
-st.set_page_config(
-    page_title="Loan Default Prediction",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
-st.title("Loan Default Prediction Application")
-
-# Sidebar for user inputs
-st.sidebar.header("User Input for Prediction")
 
 # ---------------------------
 # Data Loading and Display
@@ -246,8 +241,7 @@ def load_pytorch_model(filepath, input_dim):
     model.eval()  # Set the model to evaluation mode
     return model
 
-input_dim = 6  # Update based on the number of features
-pytorch_model = load_pytorch_model('loan_prediction_model.pth', input_dim)
+pytorch_model = load_pytorch_model('loan_prediction_model.pth', input_dim=6)
 
 # ---------------------------
 # User Input for Prediction
@@ -257,93 +251,51 @@ st.header("Loan Eligibility Prediction")
 
 # Collect user input for prediction using Streamlit widgets
 def user_input_features():
-    loan_amount = st.number_input("Loan Amount", min_value=0.0)
-    rate_of_interest = st.number_input("Rate of Interest (%)", min_value=0.0)
-    property_value = st.number_input("Property Value", min_value=0.0)
-    income = st.number_input("Income", min_value=0.0)
-    credit_score = st.number_input("Credit Score", min_value=0)
-    ltv = st.number_input("Loan to Value Ratio (%)", min_value=0.0, max_value=100.0)
-    
-    # Create a DataFrame for prediction
-    input_data = {
-        'loan_amount': loan_amount,
-        'rate_of_interest': rate_of_interest,
-        'property_value': property_value,
-        'income': income,
-        'Credit_Score': credit_score,
-        'LTV': ltv
-    }
-    return pd.DataFrame(input_data, index=[0])
+    loan_amount = st.sidebar.number_input("Loan Amount", min_value=0.0, value=10000.0)
+    rate_of_interest = st.sidebar.number_input("Rate of Interest", min_value=0.0, value=5.0)
+    property_value = st.sidebar.number_input("Property Value", min_value=0.0, value=300000.0)
+    income = st.sidebar.number_input("Annual Income", min_value=0.0, value=60000.0)
+    credit_score = st.sidebar.number_input("Credit Score", min_value=300, max_value=850, value=700)
+    ltv = st.sidebar.number_input("LTV (Loan-To-Value Ratio)", min_value=0.0, max_value=1.0, value=0.8)
+    return [loan_amount, rate_of_interest, property_value, income, credit_score, ltv]
 
-input_df = user_input_features()
+user_input = user_input_features()
+user_input_df = pd.DataFrame([user_input], columns=['loan_amount', 'rate_of_interest', 'property_value', 'income', 'Credit_Score', 'LTV'])
 
-# Make predictions using the loaded model
-if st.button("Predict"):
-    with torch.no_grad():
-        input_tensor = torch.tensor(input_df.values, dtype=torch.float32)
-        output = pytorch_model(input_tensor)
-        _, predicted = torch.max(output.data, 1)
-        
-    result = "Eligible for Loan" if predicted.item() == 1 else "Not Eligible for Loan"
-    st.success(result)
+# Convert user input to tensor
+input_tensor = torch.tensor(user_input_df.values, dtype=torch.float32)
+
+# Make prediction with the PyTorch model
+with torch.no_grad():
+    prediction = pytorch_model(input_tensor)
+    predicted_class = torch.argmax(prediction, dim=1).item()
+
+st.write("### Prediction Result:")
+if predicted_class == 0:
+    st.success("Loan is likely to be approved.")
+else:
+    st.error("Loan is likely to be denied.")
 
 # ---------------------------
-# Visualizations
+# Visualization of Predictions
 # ---------------------------
 
-st.header("Data Visualization")
+st.header("Prediction Visualization")
 
-# Visualize the distribution of loan statuses
-loan_status_counts = df_spark.groupBy('Status').count().toPandas()
-fig = px.bar(loan_status_counts, x='Status', y='count', title='Distribution of Loan Statuses', color='Status')
-st.plotly_chart(fig)
+# Create a DataFrame for visualization
+predictions_df = pd.DataFrame(predictions.select('loan_amount', 'rate_of_interest', 'property_value', 'income', 'Credit_Score', 'LTV', 'prediction').collect(), columns=['loan_amount', 'rate_of_interest', 'property_value', 'income', 'Credit_Score', 'LTV', 'prediction'])
 
-# Visualization of other features if needed
-# Visualization of the relationship between features and loan status
-st.header("Feature Importance and Correlation Heatmap")
-
-# Convert Spark DataFrame to Pandas for visualization
-df_pandas = df_spark.toPandas()
-
-# Display a correlation heatmap
-correlation = df_pandas.corr()
-fig = px.imshow(correlation, 
-                title="Correlation Heatmap",
-                labels=dict(x="Features", y="Features"),
-                x=correlation.columns,
-                y=correlation.columns,
-                color_continuous_scale='Viridis')
+# 3D Plotting with Plotly
+fig = px.scatter_3d(predictions_df, x='loan_amount', y='property_value', z='income', color='prediction',
+                     labels={'prediction': 'Prediction', 'loan_amount': 'Loan Amount', 'property_value': 'Property Value', 'income': 'Annual Income'},
+                     title='3D Visualization of Predictions')
 st.plotly_chart(fig)
 
 # ---------------------------
-# Additional Visualizations
+# Cleanup and Shutdown
 # ---------------------------
 
-# Distribution of loan amounts
-st.header("Distribution of Loan Amounts")
-fig_loan_amount = px.histogram(df_pandas, x='loan_amount', title='Loan Amount Distribution', nbins=50)
-st.plotly_chart(fig_loan_amount)
+def cleanup():
+    sc.stop()
 
-# Rate of Interest vs. Loan Status
-st.header("Rate of Interest vs. Loan Status")
-fig_interest_status = px.box(df_pandas, x='Status', y='rate_of_interest', title='Rate of Interest by Loan Status')
-st.plotly_chart(fig_interest_status)
-
-# Property Value vs. Loan Status
-st.header("Property Value vs. Loan Status")
-fig_property_status = px.box(df_pandas, x='Status', y='property_value', title='Property Value by Loan Status')
-st.plotly_chart(fig_property_status)
-
-# ---------------------------
-# Conclusion and Insights
-# ---------------------------
-
-st.header("Conclusion")
-
-st.write("""
-Based on the trained models, users can input their loan parameters and receive a prediction regarding their loan eligibility. 
-The application also provides visual insights into the distribution of loan statuses, the correlation between features, 
-and the impact of certain features on loan eligibility.
-""")
-
-st.write("Thank you for using the Loan Default Prediction Application!")
+atexit.register(cleanup)

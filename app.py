@@ -225,3 +225,14 @@ fig_scatter = px.scatter_3d(
     title="3D Scatter Plot of Loan Amount, Rate of Interest, and Age"
 )
 st.plotly_chart(fig_scatter, use_container_width=True)
+
+# ---------------------------
+# Adding Image to the Right Side
+# ---------------------------
+col1, col2 = st.columns([2, 1])  # Two columns: 2/3 for content, 1/3 for image
+
+with col1:
+    st.write("This area can contain your app content.")
+
+with col2:
+    st.image("image.jpg", caption="Loan Prediction App Image", use_column_width=True)  # Replace with your image path

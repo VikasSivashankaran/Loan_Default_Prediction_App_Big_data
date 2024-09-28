@@ -15,6 +15,39 @@ from io import StringIO
 import sys
 
 # ---------------------------
+# Spark Configuration and Initialization
+# ---------------------------
+
+def initialize_spark():
+    # Set the path to your Python executable
+    os.environ['PYSPARK_PYTHON'] = r'C:\Users\GowthamMaheswar\AppData\Local\Programs\Python\Python312\python.exe'
+    os.environ['PYSPARK_DRIVER_PYTHON'] = r'C:\Users\GowthamMaheswar\AppData\Local\Programs\Python\Python312\python.exe'
+    
+    # Create Spark configuration and context
+    conf = SparkConf() \
+        .setAppName('Loan_Default_Prediction') \
+        .setMaster("local[*]") \
+        .set("spark.executor.memory", "4g") \
+        .set("spark.driver.memory", "4g") \
+        .set("spark.network.timeout", "800s") \
+        .set("spark.executor.cores", "2")
+    
+    sc = SparkContext.getOrCreate(conf=conf)
+    
+    # Create SQLContext from SparkContext
+    sql_context = SQLContext(sc)
+    return sc, sql_context
+
+# Initialize Spark
+sc, sql_context = initialize_spark()
+
+# Stop the SparkContext when the app stops
+def stop_spark():
+    sc.stop()
+
+atexit.register(stop_spark)
+
+# ---------------------------
 # Streamlit App Configuration
 # ---------------------------
 
@@ -26,40 +59,19 @@ st.set_page_config(
 
 st.title("Loan Default Prediction Application")
 
-# ---------------------------
-# Spark Configuration and Initialization
-# ---------------------------
-
-@st.cache_resource
-def initialize_spark():
-    os.environ['PYSPARK_PYTHON'] = r'C:\Users\GowthamMaheswar\AppData\Local\Programs\Python\Python312\python.exe'
-    os.environ['PYSPARK_DRIVER_PYTHON'] = r'C:\Users\GowthamMaheswar\AppData\Local\Programs\Python\Python312\python.exe'
-    
-    conf = SparkConf() \
-        .setAppName('Loan_Default_Prediction') \
-        .setMaster("local[*]") \
-        .set("spark.executor.memory", "4g") \
-        .set("spark.driver.memory", "4g") \
-        .set("spark.network.timeout", "800s") \
-        .set("spark.executor.cores", "2")
-    
-    sc = SparkContext.getOrCreate(conf=conf)
-    sql_context = SQLContext(sc)
-    return sc, sql_context
-
-# Initialize Spark
-sc, sql_context = initialize_spark()
+# Sidebar for user inputs
+st.sidebar.header("User Input for Prediction")
 
 # ---------------------------
 # Data Loading and Display
 # ---------------------------
 
-DATA_PATH = "Loan_Default.csv"  # Specify your data path here
-
 @st.cache_data
 def load_data_pandas(filepath):
     df = pd.read_csv(filepath)
+    # Columns to impute
     columns_to_impute = ['rate_of_interest', 'property_value', 'income', 'LTV']
+    # Impute missing values with column mean
     df[columns_to_impute] = df[columns_to_impute].fillna(df[columns_to_impute].mean())
     return df
 
@@ -67,11 +79,24 @@ def load_data_spark(filepath):
     df_spark = sql_context.read.csv(filepath, header=True, inferSchema=True)
     return df_spark
 
+# File uploader for Loan_Default.csv
+uploaded_file = st.sidebar.file_uploader("Upload Loan_Default.csv", type=["csv"])
+
+if uploaded_file is not None:
+    # Save uploaded file to a temporary location
+    with open("Loan_Default.csv", "wb") as f:
+        f.write(uploaded_file.getbuffer())
+    data_path = "Loan_Default.csv"
+else:
+    st.warning("Please upload the `Loan_Default.csv` file to proceed.")
+    st.stop()
+
 # Load data using Spark
-df_spark = load_data_spark(DATA_PATH)
+df_spark = load_data_spark(data_path)
 
 st.header("Dataset Schema")
 with st.expander("View Schema"):
+    # Capture the schema as a string
     old_stdout = sys.stdout
     sys.stdout = mystdout = StringIO()
     df_spark.printSchema()
@@ -91,17 +116,28 @@ st.header("Data Preprocessing")
 columns_to_impute = ['rate_of_interest', 'property_value', 'income', 'LTV']
 output_columns = columns_to_impute
 
+# Handle missing values using Imputer
 imputer = Imputer(inputCols=columns_to_impute, outputCols=output_columns)
+
+# Assemble features into a single vector
 assembler = VectorAssembler(inputCols=['loan_amount', 'rate_of_interest', 'property_value', 'income', 'Credit_Score', 'LTV'],
                             outputCol='features')
+
+# Standardize the features
 scaler = StandardScaler(inputCol='features', outputCol='scaled_features')
 
+# Create a pipeline for preprocessing
 pipeline = Pipeline(stages=[imputer, assembler, scaler])
 
+# Fit the pipeline to the data
 with st.spinner("Preprocessing data..."):
     model = pipeline.fit(df_spark)
     df_transformed = model.transform(df_spark)
 st.success("Data preprocessing completed successfully.")
+
+# ---------------------------
+# Train-Test Split
+# ---------------------------
 
 train_data, test_data = df_transformed.randomSplit([0.8, 0.2], seed=42)
 
@@ -114,17 +150,22 @@ st.write(f"**Test Data Count:** {test_data.count()}")
 
 st.header("Logistic Regression Model")
 
+# Logistic Regression model
 lr = LogisticRegression(featuresCol='scaled_features', labelCol='Status')
 
+# Fit the model to training data
 with st.spinner("Training Logistic Regression model..."):
     lr_model = lr.fit(train_data)
 st.success("Logistic Regression model trained successfully.")
 
+# Make predictions on test data
 predictions = lr_model.transform(test_data)
 
+# Evaluate the model using ROC-AUC
 evaluator = BinaryClassificationEvaluator(labelCol='Status', rawPredictionCol='rawPrediction', metricName='areaUnderROC')
 roc_auc = evaluator.evaluate(predictions)
 
+# Calculate prediction accuracy
 accuracy_evaluator = MulticlassClassificationEvaluator(labelCol="Status", predictionCol="prediction", metricName="accuracy")
 accuracy = accuracy_evaluator.evaluate(predictions)
 
@@ -142,33 +183,42 @@ st.header("PyTorch Neural Network Model")
 class SimpleModel(nn.Module):
     def __init__(self, input_dim):
         super(SimpleModel, self).__init__()
-        self.fc = nn.Linear(input_dim, 2)
+        self.fc = nn.Linear(input_dim, 2)  # Binary classification
 
     def forward(self, x):
         return self.fc(x)
 
 @st.cache_resource
 def train_pytorch_model(filepath):
+    # Load the dataset into pandas for PyTorch training
     df = pd.read_csv(filepath)
+    
+    # Preprocess the data: Handle missing values
     columns_to_impute = ['rate_of_interest', 'property_value', 'income', 'LTV']
     df[columns_to_impute] = df[columns_to_impute].fillna(df[columns_to_impute].mean())
     
+    # Prepare features and labels
     X = df[['loan_amount', 'rate_of_interest', 'property_value', 'income', 'Credit_Score', 'LTV']].values
-    y = df['Status'].values
+    y = df['Status'].values  # Assuming 'Status' is the column to predict
     
+    # Convert to PyTorch tensors
     X_tensor = torch.tensor(X, dtype=torch.float32)
     y_tensor = torch.tensor(y, dtype=torch.long)
     
+    # Create a DataLoader
     dataset = torch.utils.data.TensorDataset(X_tensor, y_tensor)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True)
     
-    input_dim = X.shape[1]
+    # Create and train the model
+    input_dim = X.shape[1]  # Number of features
     pytorch_model = SimpleModel(input_dim)
     
+    # Define loss function and optimizer
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(pytorch_model.parameters(), lr=0.001)
     
-    for epoch in range(10):
+    # Train the model
+    for epoch in range(10):  # Number of epochs
         running_loss = 0.0
         for inputs, labels in dataloader:
             optimizer.zero_grad()
@@ -180,20 +230,24 @@ def train_pytorch_model(filepath):
         avg_loss = running_loss / len(dataloader)
         st.write(f'Epoch {epoch + 1}, Loss: {avg_loss:.4f}')
     
-    torch.save(pytorch_model.state_dict(), 'loan_prediction_model.pth')
+    # Save the trained PyTorch model
+    torch.save(pytorch_model.state_dict(), 'loan_prediction_model.pth')  # Save the model state_dict
     return pytorch_model
 
+# Train PyTorch model
 with st.spinner("Training PyTorch model..."):
-    pytorch_model = train_pytorch_model(DATA_PATH)
+    pytorch_model = train_pytorch_model(data_path)
 st.success("PyTorch model trained and saved successfully.")
 
+# Load the pre-trained PyTorch model
 def load_pytorch_model(filepath, input_dim):
     model = SimpleModel(input_dim)
     model.load_state_dict(torch.load(filepath))
-    model.eval()
+    model.eval()  # Set the model to evaluation mode
     return model
 
-pytorch_model = load_pytorch_model('loan_prediction_model.pth', input_dim=6)
+input_dim = 6  # Update based on the number of features
+pytorch_model = load_pytorch_model('loan_prediction_model.pth', input_dim)
 
 # ---------------------------
 # User Input for Prediction
@@ -201,74 +255,95 @@ pytorch_model = load_pytorch_model('loan_prediction_model.pth', input_dim=6)
 
 st.header("Loan Eligibility Prediction")
 
+# Collect user input for prediction using Streamlit widgets
 def user_input_features():
-    loan_amount = st.sidebar.number_input("Loan Amount", min_value=0.0, value=10000.0)
-    rate_of_interest = st.sidebar.number_input("Rate of Interest", min_value=0.0, value=5.0)
-    property_value = st.sidebar.number_input("Property Value", min_value=0.0, value=200000.0)
-    income = st.sidebar.number_input("Income", min_value=0.0, value=50000.0)
-    credit_score = st.sidebar.number_input("Credit Score", min_value=300, max_value=850, value=700)
-    ltv = st.sidebar.number_input("Loan-to-Value (LTV)", min_value=0.0, max_value=100.0, value=80.0)
-
-    return [loan_amount, rate_of_interest, property_value, income, credit_score, ltv]
-
-input_data = user_input_features()
-
-input_tensor = torch.tensor(input_data, dtype=torch.float32).unsqueeze(0)
-
-with torch.no_grad():
-    prediction = pytorch_model(input_tensor)
-    predicted_class = torch.argmax(prediction, dim=1).item()
-
-st.subheader("Prediction Result")
-st.write("Predicted Class:", "Default" if predicted_class == 1 else "Non-Default")
-
-# ---------------------------
-# Plotting with Plotly
-# ---------------------------
-
-st.header("Visualizations")
-
-# Load data for visualization using pandas
-loan_data = load_data_pandas(DATA_PATH)
-
-# 1. Distribution of Loan Amounts by Status
-fig1 = px.histogram(loan_data, x='loan_amount', color='Status', barmode='overlay',
-                    labels={'Status': 'Loan Status'},
-                    title="Distribution of Loan Amounts by Status")
-st.plotly_chart(fig1)
-
-if 'age' in loan_data.columns:
-    sampled_df = loan_data.sample(n=min(100, len(loan_data)))  # Sampling for better performance
+    loan_amount = st.number_input("Loan Amount", min_value=0.0)
+    rate_of_interest = st.number_input("Rate of Interest (%)", min_value=0.0)
+    property_value = st.number_input("Property Value", min_value=0.0)
+    income = st.number_input("Income", min_value=0.0)
+    credit_score = st.number_input("Credit Score", min_value=0)
+    ltv = st.number_input("Loan to Value Ratio (%)", min_value=0.0, max_value=100.0)
     
-    # 3D Line Plot
-    st.subheader("3D Line Plot")
-    fig_line = px.line_3d(
-        sampled_df,
-        x="loan_amount",
-        y="rate_of_interest",
-        z="age",
-        title="3D Line Plot of Loan Amount, Rate of Interest, and Age"
-    )
-    st.plotly_chart(fig_line, use_container_width=True)
+    # Create a DataFrame for prediction
+    input_data = {
+        'loan_amount': loan_amount,
+        'rate_of_interest': rate_of_interest,
+        'property_value': property_value,
+        'income': income,
+        'Credit_Score': credit_score,
+        'LTV': ltv
+    }
+    return pd.DataFrame(input_data, index=[0])
 
-    # 3D Scatter Plot
-    st.subheader("3D Scatter Plot")
-    fig_scatter = px.scatter_3d(
-        sampled_df,
-        x="loan_amount",
-        y="rate_of_interest",
-        z="age", 
-        color='age',
-        size='rate_of_interest',
-        symbol='loan_amount',
-        title="3D Scatter Plot of Loan Amount, Rate of Interest, and Age"
-    )
-    st.plotly_chart(fig_scatter, use_container_width=True)
-else:
-    st.warning("The 'age' column is not available in the dataset for 3D plots.")
+input_df = user_input_features()
+
+# Make predictions using the loaded model
+if st.button("Predict"):
+    with torch.no_grad():
+        input_tensor = torch.tensor(input_df.values, dtype=torch.float32)
+        output = pytorch_model(input_tensor)
+        _, predicted = torch.max(output.data, 1)
+        
+    result = "Eligible for Loan" if predicted.item() == 1 else "Not Eligible for Loan"
+    st.success(result)
 
 # ---------------------------
-# Clean-up
+# Visualizations
 # ---------------------------
 
-atexit.register(sc.stop)
+st.header("Data Visualization")
+
+# Visualize the distribution of loan statuses
+loan_status_counts = df_spark.groupBy('Status').count().toPandas()
+fig = px.bar(loan_status_counts, x='Status', y='count', title='Distribution of Loan Statuses', color='Status')
+st.plotly_chart(fig)
+
+# Visualization of other features if needed
+# Visualization of the relationship between features and loan status
+st.header("Feature Importance and Correlation Heatmap")
+
+# Convert Spark DataFrame to Pandas for visualization
+df_pandas = df_spark.toPandas()
+
+# Display a correlation heatmap
+correlation = df_pandas.corr()
+fig = px.imshow(correlation, 
+                title="Correlation Heatmap",
+                labels=dict(x="Features", y="Features"),
+                x=correlation.columns,
+                y=correlation.columns,
+                color_continuous_scale='Viridis')
+st.plotly_chart(fig)
+
+# ---------------------------
+# Additional Visualizations
+# ---------------------------
+
+# Distribution of loan amounts
+st.header("Distribution of Loan Amounts")
+fig_loan_amount = px.histogram(df_pandas, x='loan_amount', title='Loan Amount Distribution', nbins=50)
+st.plotly_chart(fig_loan_amount)
+
+# Rate of Interest vs. Loan Status
+st.header("Rate of Interest vs. Loan Status")
+fig_interest_status = px.box(df_pandas, x='Status', y='rate_of_interest', title='Rate of Interest by Loan Status')
+st.plotly_chart(fig_interest_status)
+
+# Property Value vs. Loan Status
+st.header("Property Value vs. Loan Status")
+fig_property_status = px.box(df_pandas, x='Status', y='property_value', title='Property Value by Loan Status')
+st.plotly_chart(fig_property_status)
+
+# ---------------------------
+# Conclusion and Insights
+# ---------------------------
+
+st.header("Conclusion")
+
+st.write("""
+Based on the trained models, users can input their loan parameters and receive a prediction regarding their loan eligibility. 
+The application also provides visual insights into the distribution of loan statuses, the correlation between features, 
+and the impact of certain features on loan eligibility.
+""")
+
+st.write("Thank you for using the Loan Default Prediction Application!")

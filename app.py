@@ -35,6 +35,9 @@ st.sidebar.header("User Input for Prediction")
 
 @st.cache_resource
 def initialize_spark():
+    # Set JAVA_HOME environment variable
+    os.environ['JAVA_HOME'] = 'C:\Program Files\Java\jdk1.8.0_202'
+    
     # Initialize Spark without specifying Java paths
     conf = SparkConf() \
         .setAppName('Loan_Default_Prediction') \
@@ -185,31 +188,31 @@ class SimpleModel(nn.Module):
 def train_pytorch_model(filepath):
     # Load the dataset into pandas for PyTorch training
     df = pd.read_csv(filepath)
-    
+
     # Preprocess the data: Handle missing values
     columns_to_impute = ['rate_of_interest', 'property_value', 'income', 'LTV']
     df[columns_to_impute] = df[columns_to_impute].fillna(df[columns_to_impute].mean())
-    
+
     # Prepare features and labels
     X = df[['loan_amount', 'rate_of_interest', 'property_value', 'income', 'Credit_Score', 'LTV']].values
     y = df['Status'].values  # Assuming 'Status' is the column to predict
-    
+
     # Convert to PyTorch tensors
     X_tensor = torch.tensor(X, dtype=torch.float32)
     y_tensor = torch.tensor(y, dtype=torch.long)
-    
+
     # Create a DataLoader
     dataset = torch.utils.data.TensorDataset(X_tensor, y_tensor)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True)
-    
+
     # Create and train the model
     input_dim = X.shape[1]  # Number of features
     pytorch_model = SimpleModel(input_dim)
-    
+
     # Define loss function and optimizer
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(pytorch_model.parameters(), lr=0.001)
-    
+
     # Train the model
     for epoch in range(10):  # Number of epochs
         running_loss = 0.0
@@ -222,7 +225,7 @@ def train_pytorch_model(filepath):
             running_loss += loss.item()
         avg_loss = running_loss / len(dataloader)
         st.write(f'Epoch {epoch + 1}, Loss: {avg_loss:.4f}')
-    
+
     # Save the trained PyTorch model
     torch.save(pytorch_model.state_dict(), 'loan_prediction_model.pth')  # Save the model state_dict
     return pytorch_model
@@ -255,7 +258,7 @@ def user_input_features():
     income = st.sidebar.number_input("Income", min_value=0.0, value=50000.0)
     credit_score = st.sidebar.number_input("Credit Score", min_value=300, max_value=850, value=700)
     ltv = st.sidebar.number_input("Loan-to-Value (LTV)", min_value=0.0, max_value=100.0, value=80.0)
-    
+
     data = {
         'loan_amount': loan_amount,
         'rate_of_interest': rate_of_interest,

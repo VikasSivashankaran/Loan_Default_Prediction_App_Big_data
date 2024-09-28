@@ -29,9 +29,9 @@ def initialize_spark():
 
 # Load dataset and initialize pipeline
 @st.cache_data
-def load_and_preprocess_data(sql_context):
+def load_and_preprocess_data(_sql_context):
     # Load dataset into a Spark DataFrame
-    df_spark = sql_context.read.csv('Loan_Default.csv', header=True, inferSchema=True)
+    df_spark = _sql_context.read.csv('Loan_Default.csv', header=True, inferSchema=True)
 
     # Identify columns for imputation
     columns_to_impute = ['rate_of_interest', 'property_value', 'income', 'LTV']

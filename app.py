@@ -36,7 +36,7 @@ st.sidebar.header("User Input for Prediction")
 @st.cache_resource
 def initialize_spark():
     # Set JAVA_HOME environment variable
-    os.environ['JAVA_HOME'] = 'C:\Program Files\Java\jdk1.8.0_202'
+    os.environ['JAVA_HOME'] = 'C:/Program Files/Java/jdk1.8.0_202'
     
     # Initialize Spark without specifying Java paths
     conf = SparkConf() \

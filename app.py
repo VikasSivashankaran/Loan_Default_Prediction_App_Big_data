@@ -237,30 +237,35 @@ fig1 = px.histogram(loan_data, x='loan_amount', color='Status', barmode='overlay
                     title="Distribution of Loan Amounts by Status")
 st.plotly_chart(fig1)
 
-# 3D Line Plot
-st.subheader("3D Line Plot")
-fig_line = px.line_3d(
-    sampled_df,
-    x="loan_amount",
-    y="rate_of_interest",
-    z="age",
-    title="3D Line Plot of Loan Amount, Rate of Interest, and Age"
-)
-st.plotly_chart(fig_line, use_container_width=True)
+if 'age' in loan_data.columns:
+    sampled_df = loan_data.sample(n=min(100, len(loan_data)))  # Sampling for better performance
+    
+    # 3D Line Plot
+    st.subheader("3D Line Plot")
+    fig_line = px.line_3d(
+        sampled_df,
+        x="loan_amount",
+        y="rate_of_interest",
+        z="age",
+        title="3D Line Plot of Loan Amount, Rate of Interest, and Age"
+    )
+    st.plotly_chart(fig_line, use_container_width=True)
 
-# 3D Scatter Plot
-st.subheader("3D Scatter Plot")
-fig_scatter = px.scatter_3d(
-    sampled_df,
-    x="loan_amount",
-    y="rate_of_interest",
-    z="age", 
-    color='age',
-    size='rate_of_interest',
-    symbol='loan_amount',
-    title="3D Scatter Plot of Loan Amount, Rate of Interest, and Age"
-)
-st.plotly_chart(fig_scatter, use_container_width=True)
+    # 3D Scatter Plot
+    st.subheader("3D Scatter Plot")
+    fig_scatter = px.scatter_3d(
+        sampled_df,
+        x="loan_amount",
+        y="rate_of_interest",
+        z="age", 
+        color='age',
+        size='rate_of_interest',
+        symbol='loan_amount',
+        title="3D Scatter Plot of Loan Amount, Rate of Interest, and Age"
+    )
+    st.plotly_chart(fig_scatter, use_container_width=True)
+else:
+    st.warning("The 'age' column is not available in the dataset for 3D plots.")
 
 # ---------------------------
 # Clean-up

@@ -1,4 +1,4 @@
-PROJECT VISUALIZATION LINK : https://bigdataloanproject.streamlit.app/
+PROJECT VISUALIZATION LINK : (https://vikassivashankaran-loan-default-prediction-app-big-d-app-xjj1w4.streamlit.app/)
 
 Loan_Default_Prediction_App_Big_data
 

@@ -49,7 +49,7 @@ if uploaded_file is not None:
 else:
     st.warning("Please upload the `Loan_Default.csv` file to proceed.")
     st.stop()
-
+st.balloons()
 # Load data using Pandas
 df = load_data(data_path)
 

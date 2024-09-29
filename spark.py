@@ -1,16 +1,13 @@
+import os
 from pyspark import SparkConf, SparkContext
 from pyspark.sql import SQLContext
 from pyspark.ml.feature import Imputer, VectorAssembler, StandardScaler
 from pyspark.ml.classification import LogisticRegression
 from pyspark.ml import Pipeline
 from pyspark.ml.evaluation import BinaryClassificationEvaluator, MulticlassClassificationEvaluator
-import os
-import torch
-import torch.nn as nn
-import pandas as pd
-import plotly.express as px
+import subprocess
 
-# Set the path to your Python executable
+# Set the path to your Python executable for PySpark
 os.environ['PYSPARK_PYTHON'] = r'C:\Users\GowthamMaheswar\AppData\Local\Programs\Python\Python312\python.exe'
 os.environ['PYSPARK_DRIVER_PYTHON'] = r'C:\Users\GowthamMaheswar\AppData\Local\Programs\Python\Python312\python.exe'
 
@@ -82,3 +79,13 @@ print(f"Accuracy: {accuracy}")
 
 # Stop the SparkContext
 sc.stop()
+
+# --------------------------------------------------------
+# After the PySpark job completes, automatically start the Streamlit app
+# --------------------------------------------------------
+
+# Path to the Streamlit app (assuming it is in the same directory)
+streamlit_app_path = os.path.join(os.getcwd(), 'app.py')
+
+# Use subprocess to start Streamlit programmatically
+subprocess.run(['streamlit', 'run', streamlit_app_path])
